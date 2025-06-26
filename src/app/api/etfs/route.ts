@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import * as cheerio from 'cheerio'
 
+export const dynamic = 'force-dynamic'
+
 interface ETFHolding {
   ticker: string
   name: string
@@ -140,8 +142,8 @@ function parseETFHoldingsHTML(html: string): ETFData[] {
 
   // Parse ETF holdings table from Bitbo.io
   // Look for common table structures
-  $('table').each((tableIndex, table) => {
-    $(table).find('tbody tr, tr').each((rowIndex, element) => {
+  $('table').each((tableIndex: number, table: any) => {
+    $(table).find('tbody tr, tr').each((rowIndex: number, element: any) => {
       const row = $(element)
       const cells = row.find('td, th')
 
@@ -188,7 +190,7 @@ function parseETFFromBitcoinTreasuries(html: string): ETFData[] {
   const etfs: ETFData[] = []
 
   // Look for ETF-specific sections in BitcoinTreasuries
-  $('table tbody tr').each((index, element) => {
+  $('table tbody tr').each((index: number, element: any) => {
     const row = $(element)
     const cells = row.find('td')
 

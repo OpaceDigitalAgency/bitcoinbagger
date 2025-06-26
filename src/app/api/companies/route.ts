@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import * as cheerio from 'cheerio'
 
+export const dynamic = 'force-dynamic'
+
 interface CompanyData {
   ticker: string
   name: string
@@ -116,7 +118,7 @@ function parseBitcoinTreasuryHTML(html: string): BitcoinTreasuryData[] {
   const companies: BitcoinTreasuryData[] = []
 
   // Parse the main table - adjust selectors based on actual HTML structure
-  $('table tbody tr').each((index, element) => {
+  $('table tbody tr').each((index: number, element: any) => {
     const row = $(element)
     const cells = row.find('td')
 
