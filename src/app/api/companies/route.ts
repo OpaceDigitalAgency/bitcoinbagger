@@ -112,7 +112,7 @@ async function fetchBitcoinTreasuryData(): Promise<BitcoinTreasuryData[] | null>
 }
 
 function parseBitcoinTreasuryHTML(html: string): BitcoinTreasuryData[] {
-  const $ = cheerio.load(html)
+  const $ = cheerio.load(html) as any
   const companies: BitcoinTreasuryData[] = []
 
   // Parse the main table - adjust selectors based on actual HTML structure
