@@ -3,7 +3,7 @@ import { ETFData } from '@/types'
 
 
 export function useETFData() {
-  return useSWR('/api/etfs', {
+  return useSWR('/.netlify/functions/etfs', {
     refreshInterval: 60000,
     revalidateOnFocus: false,
   })
