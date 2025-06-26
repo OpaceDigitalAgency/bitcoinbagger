@@ -11,7 +11,7 @@ interface Props {
 async function getETFData(ticker: string) {
   try {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
-    const response = await fetch(`${baseUrl}/api/etfs`, {
+    const response = await fetch(`${baseUrl}/.netlify/functions/etfs`, {
       next: { revalidate: 300 }
     })
     

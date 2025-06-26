@@ -3,7 +3,7 @@ import { CompanyData } from '@/types'
 
 
 export function useCompaniesData() {
-  return useSWR('/api/companies', {
+  return useSWR('/.netlify/functions/companies', {
     refreshInterval: 60000,
     revalidateOnFocus: false,
   })
