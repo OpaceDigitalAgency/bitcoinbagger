@@ -1,0 +1,3 @@
+{
+  "/api/bitcoin-price/route": "app/api/bitcoin-price/route.js"
+}
