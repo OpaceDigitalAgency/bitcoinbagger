@@ -31,7 +31,11 @@ exports.handler = async (event, context) => {
     // Fetch live Bitcoin price for calculations
     const btcResponse = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd');
     const btcData = await btcResponse.json();
-    const btcPrice = btcData.bitcoin?.usd || 107000;
+    const btcPrice = btcData.bitcoin?.usd;
+    
+    if (!btcPrice) {
+      throw new Error('Failed to get Bitcoin price from CoinGecko');
+    }
 
     // Fetch live stock prices using Yahoo Finance API (more reliable than Alpha Vantage demo)
     const tickers = ['MSTR', 'TSLA', 'MARA', 'RIOT', 'COIN'];
@@ -146,31 +150,14 @@ exports.handler = async (event, context) => {
   } catch (error) {
     console.error('Error fetching live companies data:', error);
     
-    // Only use fallback if live data completely fails
-    const fallbackData = [
-      {
-        rank: 1,
-        name: "MicroStrategy",
-        ticker: "MSTR",
-        btcHeld: 439000,
-        btcValue: 46973000000,
-        marketPrice: 397.50,
-        marketCap: 79500000000,
-        premium: 69.3,
-        bsp: 1069.84,
-        sharesOutstanding: 11.7,
-        businessModel: "Business Intelligence Software",
-        btcRole: "Primary Treasury Reserve Asset"
-      }
-    ];
-    
+    // Return error - NO FALLBACK DATA
     return {
-      statusCode: 200,
-      headers: {
-        ...headers,
-        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300'
-      },
-      body: JSON.stringify(fallbackData)
+      statusCode: 503,
+      headers,
+      body: JSON.stringify({
+        error: 'Unable to fetch live companies data',
+        message: 'API temporarily unavailable'
+      })
     };
   }
 };

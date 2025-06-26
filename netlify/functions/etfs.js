@@ -30,7 +30,11 @@ exports.handler = async (event, context) => {
     // Fetch live Bitcoin price for calculations
     const btcResponse = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd');
     const btcData = await btcResponse.json();
-    const btcPrice = btcData.bitcoin?.usd || 107000;
+    const btcPrice = btcData.bitcoin?.usd;
+    
+    if (!btcPrice) {
+      throw new Error('Failed to get Bitcoin price from CoinGecko');
+    }
 
     // Fetch live ETF prices
     const etfTickers = ['IBIT', 'FBTC', 'ARKB', 'BITB', 'BTCO'];
@@ -128,35 +132,14 @@ exports.handler = async (event, context) => {
   } catch (error) {
     console.error('Error fetching ETFs data:', error);
     
-    // Return fallback data on error
-    const fallbackData = [
-      {
-        ticker: "IBIT",
-        name: "iShares Bitcoin Trust",
-        btcHeld: 428000,
-        price: 42.50,
-        btcPerShare: 0.00025,
-        sharesOutstanding: 1712000000,
-        premiumDiscount: 0.15
-      },
-      {
-        ticker: "FBTC",
-        name: "Fidelity Wise Origin Bitcoin Fund",
-        btcHeld: 185000,
-        price: 52.30,
-        btcPerShare: 0.0003,
-        sharesOutstanding: 616666667,
-        premiumDiscount: -0.08
-      }
-    ];
-    
+    // Return error - NO FALLBACK DATA
     return {
-      statusCode: 200,
-      headers: {
-        ...headers,
-        'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600'
-      },
-      body: JSON.stringify(fallbackData)
+      statusCode: 503,
+      headers,
+      body: JSON.stringify({
+        error: 'Unable to fetch live ETF data',
+        message: 'API temporarily unavailable'
+      })
     };
   }
 };
