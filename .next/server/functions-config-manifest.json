@@ -1,1 +1,1 @@
-{"version":1,"functions":{"/companies":{},"/etfs/[ticker]":{},"/companies/[ticker]":{},"/etfs":{},"/":{}}}
+{"version":1,"functions":{"/companies/[ticker]":{},"/etfs/[ticker]":{},"/companies":{},"/etfs":{},"/":{}}}
