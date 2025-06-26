@@ -36,16 +36,29 @@ exports.handler = async (event, context) => {
       throw new Error('Failed to get Bitcoin price from CoinGecko');
     }
 
-    // Fetch live ETF prices
+    // Fetch live ETF prices using Financial Modeling Prep API (free tier)
     const etfTickers = ['IBIT', 'FBTC', 'ARKB', 'BITB', 'BTCO'];
     const etfPromises = etfTickers.map(async (ticker) => {
       try {
-        // Using Alpha Vantage free API (you can replace with your preferred stock API)
-        const response = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${ticker}&apikey=demo`);
+        // Using Financial Modeling Prep free API
+        const response = await fetch(`https://financialmodelingprep.com/api/v3/quote-short/${ticker}?apikey=demo`, {
+          headers: {
+            'User-Agent': 'BitcoinBagger/1.0'
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        
         const data = await response.json();
+        const price = data[0]?.price;
+        
+        console.log(`${ticker}: $${price || 'FAILED'}`);
+        
         return {
           ticker,
-          price: parseFloat(data['Global Quote']?.['05. price']) || null
+          price: price ? parseFloat(price) : null
         };
       } catch (error) {
         console.error(`Error fetching ${ticker}:`, error);
