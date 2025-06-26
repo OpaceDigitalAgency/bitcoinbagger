@@ -135,7 +135,7 @@ function getKnownETFsWithEstimates(): ETFData[] {
 }
 
 function parseETFHoldingsHTML(html: string): ETFData[] {
-  const $ = cheerio.load(html)
+  const $ = cheerio.load(html) as any
   const etfs: ETFData[] = []
 
   // Parse ETF holdings table from Bitbo.io
@@ -184,7 +184,7 @@ function parseETFHoldingsHTML(html: string): ETFData[] {
 }
 
 function parseETFFromBitcoinTreasuries(html: string): ETFData[] {
-  const $ = cheerio.load(html)
+  const $ = cheerio.load(html) as any
   const etfs: ETFData[] = []
 
   // Look for ETF-specific sections in BitcoinTreasuries
@@ -222,7 +222,7 @@ function extractETFTicker(nameText: string): string | null {
   return tickerMatch ? tickerMatch[1] : null
 }
 
-function extractETFDataFromHTML($: cheerio.CheerioAPI, ticker: string): ETFData | null {
+function extractETFDataFromHTML($: any, ticker: string): ETFData | null {
   // Look for ticker in the HTML and extract associated data
   const tickerElement = $(`*:contains("${ticker}")`).first()
   if (tickerElement.length > 0) {
