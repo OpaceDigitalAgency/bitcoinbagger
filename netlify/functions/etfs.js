@@ -36,30 +36,46 @@ exports.handler = async (event, context) => {
       throw new Error('Failed to get Bitcoin price from CoinGecko');
     }
 
-    // Fetch live ETF prices using Financial Modeling Prep API (free tier)
+    // Fetch live ETF prices using multiple reliable free APIs
     const etfTickers = ['IBIT', 'FBTC', 'ARKB', 'BITB', 'BTCO'];
     const etfPromises = etfTickers.map(async (ticker) => {
       try {
-        // Using Financial Modeling Prep free API
-        const response = await fetch(`https://financialmodelingprep.com/api/v3/quote-short/${ticker}?apikey=demo`, {
+        // Try Yahoo Finance first (most reliable)
+        let response = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1d&includePrePost=false`, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          const result = data.chart?.result?.[0];
+          const price = result?.meta?.regularMarketPrice || result?.meta?.previousClose;
+          if (price) {
+            console.log(`${ticker}: $${price} (Yahoo)`);
+            return { ticker, price: parseFloat(price) };
+          }
+        }
+        
+        // Fallback to Finnhub (reliable free API)
+        response = await fetch(`https://finnhub.io/api/v1/quote?symbol=${ticker}&token=demo`, {
           headers: {
             'User-Agent': 'BitcoinBagger/1.0'
           }
         });
         
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+        if (response.ok) {
+          const data = await response.json();
+          const price = data.c; // current price
+          if (price && price > 0) {
+            console.log(`${ticker}: $${price} (Finnhub)`);
+            return { ticker, price: parseFloat(price) };
+          }
         }
         
-        const data = await response.json();
-        const price = data[0]?.price;
+        console.log(`${ticker}: FAILED both APIs`);
+        return { ticker, price: null };
         
-        console.log(`${ticker}: $${price || 'FAILED'}`);
-        
-        return {
-          ticker,
-          price: price ? parseFloat(price) : null
-        };
       } catch (error) {
         console.error(`Error fetching ${ticker}:`, error);
         return { ticker, price: null };
