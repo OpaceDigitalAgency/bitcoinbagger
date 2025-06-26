@@ -1,12 +1,12 @@
 import { Metadata } from 'next'
 import Link from 'next/link'
-import dynamic from 'next/dynamic'
+import dynamicImport from 'next/dynamic'
 import { Bitcoin, TrendingUp, Building2, PieChart } from 'lucide-react'
 import { formatCurrency, formatNumber } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
-const Navigation = dynamic(() => import('@/components/Navigation').then(mod => ({ default: mod.Navigation })), {
+const Navigation = dynamicImport(() => import('@/components/Navigation').then(mod => ({ default: mod.Navigation })), {
   ssr: false
 })
 
