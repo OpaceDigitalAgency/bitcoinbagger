@@ -1,1 +1,1 @@
-{"/_not-found/page":"/_not-found","/companies/[ticker]/page":"/companies/[ticker]","/api/bitcoin-price/route":"/api/bitcoin-price","/etfs/[ticker]/page":"/etfs/[ticker]","/api/companies/route":"/api/companies","/api/proxy/fmp/route":"/api/proxy/fmp","/api/proxy/iex/route":"/api/proxy/iex","/companies/page":"/companies","/etfs/page":"/etfs","/page":"/","/api/etfs/route":"/api/etfs"}
+{"/_not-found/page":"/_not-found","/etfs/page":"/etfs","/companies/[ticker]/page":"/companies/[ticker]","/companies/page":"/companies","/etfs/[ticker]/page":"/etfs/[ticker]","/page":"/"}
