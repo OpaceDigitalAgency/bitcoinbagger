@@ -89,11 +89,7 @@ exports.handler = async (event, context) => {
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({
-        companies: companies.slice(0, 20), // Return top 20
-        bitcoinPrice,
-        lastUpdated: new Date().toISOString()
-      })
+      body: JSON.stringify(companies.slice(0, 20)) // Return companies array directly
     };
   } catch (error) {
     console.error('Error fetching companies data:', error);

@@ -20,6 +20,9 @@ async function getCompanyData(ticker: string) {
     }
     
     const companies = await response.json()
+    if (!Array.isArray(companies)) {
+      return null
+    }
     return companies.find((c: any) => c.ticker.toLowerCase() === ticker.toLowerCase())
   } catch (error) {
     console.error('Error fetching company data:', error)
