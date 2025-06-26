@@ -55,13 +55,12 @@ exports.handler = async (event, context) => {
       return acc;
     }, {});
 
-    // ETF data with known holdings (these would ideally come from official ETF data sources)
-    const etfs = [
+    // ETF data with known holdings
+    const etfData = [
       {
         ticker: "IBIT",
         name: "iShares Bitcoin Trust",
-        btcHeld: 428000, // This would come from official ETF holdings data
-        price: etfPrices.IBIT || 42.50,
+        btcHeld: 428000,
         btcPerShare: 0.00025,
         sharesOutstanding: 1712000000
       },
@@ -69,7 +68,6 @@ exports.handler = async (event, context) => {
         ticker: "FBTC",
         name: "Fidelity Wise Origin Bitcoin Fund",
         btcHeld: 185000,
-        price: etfPrices.FBTC || 52.30,
         btcPerShare: 0.0003,
         sharesOutstanding: 616666667
       },
@@ -77,7 +75,6 @@ exports.handler = async (event, context) => {
         ticker: "ARKB",
         name: "ARK 21Shares Bitcoin ETF",
         btcHeld: 45000,
-        price: etfPrices.ARKB || 68.20,
         btcPerShare: 0.00039,
         sharesOutstanding: 115384615
       },
@@ -85,7 +82,6 @@ exports.handler = async (event, context) => {
         ticker: "BITB",
         name: "Bitwise Bitcoin ETF",
         btcHeld: 38000,
-        price: etfPrices.BITB || 35.80,
         btcPerShare: 0.00021,
         sharesOutstanding: 180952381
       },
@@ -93,11 +89,21 @@ exports.handler = async (event, context) => {
         ticker: "BTCO",
         name: "Invesco Galaxy Bitcoin ETF",
         btcHeld: 32000,
-        price: etfPrices.BTCO || 58.90,
         btcPerShare: 0.00034,
         sharesOutstanding: 94117647
       }
     ];
+
+    // Only include ETFs where we successfully fetched live prices
+    const etfs = etfData
+      .filter(etf => etfPrices[etf.ticker] !== null && etfPrices[etf.ticker] !== undefined)
+      .map(etf => ({
+        ...etf,
+        price: etfPrices[etf.ticker]
+      }));
+
+    console.log(`Successfully fetched prices for ${etfs.length} ETFs:`,
+      etfs.map(e => `${e.ticker}: $${e.price}`));
 
     // Calculate live premium/discount based on current prices
     const enrichedETFs = etfs.map(etf => {
