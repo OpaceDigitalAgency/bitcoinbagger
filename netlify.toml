@@ -4,11 +4,3 @@
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
-
-[functions]
-  external_node_modules = ["cheerio"]
-
-# Force Next.js runtime for API routes
-[[edge_functions]]
-  function = "api-handler"
-  path = "/api/*"
