@@ -12,7 +12,9 @@ const nextConfig = {
     serverComponentsExternalPackages: ['cheerio']
   },
   // Ensure proper trailing slash handling
-  trailingSlash: false
+  trailingSlash: false,
+  // Netlify-specific configuration
+  target: 'serverless'
 }
 
 module.exports = nextConfig

@@ -1,5 +1,1 @@
-{
-  "/api/proxy/iex/route": "app/api/proxy/iex/route.js",
-  "/api/companies/route": "app/api/companies/route.js",
-  "/api/proxy/fmp/route": "app/api/proxy/fmp/route.js"
-}
+{}
