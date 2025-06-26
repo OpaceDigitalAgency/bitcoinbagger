@@ -8,10 +8,22 @@ interface Props {
   params: { ticker: string }
 }
 
+// Generate static params for static export
+export async function generateStaticParams() {
+  // Return a few common tickers for static generation
+  return [
+    { ticker: 'mstr' },
+    { ticker: 'tsla' },
+    { ticker: 'mara' },
+    { ticker: 'riot' },
+    { ticker: 'coin' }
+  ]
+}
+
 async function getCompanyData(ticker: string) {
   try {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
-    const response = await fetch(`${baseUrl}/api/companies`, {
+    const response = await fetch(`${baseUrl}/.netlify/functions/companies`, {
       next: { revalidate: 300 }
     })
     

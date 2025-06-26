@@ -16,6 +16,14 @@
       "static/chunks/787-efd0d55bd8a3470f.js",
       "static/chunks/app/layout-f56f45c5d82d04b7.js"
     ],
+    "/etfs/page": [
+      "static/chunks/webpack-9d964d8cb0d81fe9.js",
+      "static/chunks/fd9d1056-a5275af29dd112f2.js",
+      "static/chunks/117-e33b8d92980aa48d.js",
+      "static/chunks/main-app-ec01658066088cad.js",
+      "static/chunks/787-efd0d55bd8a3470f.js",
+      "static/chunks/app/etfs/page-e157d3c87cc27390.js"
+    ],
     "/companies/[ticker]/page": [
       "static/chunks/webpack-9d964d8cb0d81fe9.js",
       "static/chunks/fd9d1056-a5275af29dd112f2.js",
@@ -23,14 +31,6 @@
       "static/chunks/main-app-ec01658066088cad.js",
       "static/chunks/787-efd0d55bd8a3470f.js",
       "static/chunks/app/companies/[ticker]/page-905171a5f1b0523f.js"
-    ],
-    "/etfs/[ticker]/page": [
-      "static/chunks/webpack-9d964d8cb0d81fe9.js",
-      "static/chunks/fd9d1056-a5275af29dd112f2.js",
-      "static/chunks/117-e33b8d92980aa48d.js",
-      "static/chunks/main-app-ec01658066088cad.js",
-      "static/chunks/787-efd0d55bd8a3470f.js",
-      "static/chunks/app/etfs/[ticker]/page-5e27e55145b066e8.js"
     ],
     "/companies/page": [
       "static/chunks/webpack-9d964d8cb0d81fe9.js",
@@ -40,13 +40,13 @@
       "static/chunks/787-efd0d55bd8a3470f.js",
       "static/chunks/app/companies/page-0dec4b5e7949a31a.js"
     ],
-    "/etfs/page": [
+    "/etfs/[ticker]/page": [
       "static/chunks/webpack-9d964d8cb0d81fe9.js",
       "static/chunks/fd9d1056-a5275af29dd112f2.js",
       "static/chunks/117-e33b8d92980aa48d.js",
       "static/chunks/main-app-ec01658066088cad.js",
       "static/chunks/787-efd0d55bd8a3470f.js",
-      "static/chunks/app/etfs/page-e157d3c87cc27390.js"
+      "static/chunks/app/etfs/[ticker]/page-5e27e55145b066e8.js"
     ],
     "/page": [
       "static/chunks/webpack-9d964d8cb0d81fe9.js",

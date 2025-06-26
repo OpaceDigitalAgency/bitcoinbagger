@@ -8,6 +8,18 @@ interface Props {
   params: { ticker: string }
 }
 
+// Generate static params for static export
+export async function generateStaticParams() {
+  // Return a few common ETF tickers for static generation
+  return [
+    { ticker: 'ibit' },
+    { ticker: 'fbtc' },
+    { ticker: 'arkb' },
+    { ticker: 'bitb' },
+    { ticker: 'btco' }
+  ]
+}
+
 async function getETFData(ticker: string) {
   try {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
