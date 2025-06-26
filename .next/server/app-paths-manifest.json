@@ -1,13 +1,13 @@
 {
   "/_not-found/page": "app/_not-found/page.js",
   "/api/bitcoin-price/route": "app/api/bitcoin-price/route.js",
-  "/companies/[ticker]/page": "app/companies/[ticker]/page.js",
   "/api/companies/route": "app/api/companies/route.js",
+  "/companies/[ticker]/page": "app/companies/[ticker]/page.js",
   "/etfs/[ticker]/page": "app/etfs/[ticker]/page.js",
-  "/companies/page": "app/companies/page.js",
-  "/api/proxy/iex/route": "app/api/proxy/iex/route.js",
   "/api/etfs/route": "app/api/etfs/route.js",
+  "/api/proxy/iex/route": "app/api/proxy/iex/route.js",
   "/api/proxy/fmp/route": "app/api/proxy/fmp/route.js",
+  "/companies/page": "app/companies/page.js",
   "/etfs/page": "app/etfs/page.js",
   "/page": "app/page.js"
 }
