@@ -29,8 +29,8 @@ export const metadata: Metadata = {
 
 async function getBitcoinData() {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
-    const response = await fetch(`${baseUrl}/.netlify/functions/bitcoin-price`, {
+    // Use relative URL for Netlify Functions
+    const response = await fetch('/.netlify/functions/bitcoin-price', {
       next: { revalidate: 300 }
     })
 
@@ -53,8 +53,8 @@ async function getBitcoinData() {
 
 async function getTopCompanies() {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
-    const response = await fetch(`${baseUrl}/api/companies`, {
+    // Use Netlify Functions instead of Next.js API routes
+    const response = await fetch('/.netlify/functions/companies', {
       next: { revalidate: 300 }
     })
     
@@ -72,8 +72,8 @@ async function getTopCompanies() {
 
 async function getTopETFs() {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
-    const response = await fetch(`${baseUrl}/api/etfs`, {
+    // Use Netlify Functions instead of Next.js API routes
+    const response = await fetch('/.netlify/functions/etfs', {
       next: { revalidate: 300 }
     })
     

@@ -24,8 +24,8 @@ export const metadata: Metadata = {
 
 async function getCompaniesData() {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
-    const response = await fetch(`${baseUrl}/api/companies`, {
+    // Use Netlify Functions instead of Next.js API routes
+    const response = await fetch('/.netlify/functions/companies', {
       next: { revalidate: 300 } // 5 minute ISR
     })
     
@@ -43,8 +43,8 @@ async function getCompaniesData() {
 
 async function getBitcoinPrice() {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
-    const response = await fetch(`${baseUrl}/api/bitcoin-price`, {
+    // Use Netlify Functions instead of Next.js API routes
+    const response = await fetch('/.netlify/functions/bitcoin-price', {
       next: { revalidate: 300 }
     })
 
