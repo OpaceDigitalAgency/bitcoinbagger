@@ -3,6 +3,8 @@ import { CompaniesPageClient } from '@/components/CompaniesPageClient'
 import { formatCurrency } from '@/lib/utils'
 import { Navigation } from '@/components/Navigation'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: 'Bitcoin Proxy Companies | BitcoinBagger',
   description: 'Track public companies holding Bitcoin as treasury assets. Live data on MicroStrategy, Marathon Digital, Tesla, and other Bitcoin proxy stocks.',
@@ -78,12 +80,12 @@ export default async function CompaniesPage() {
           <p className="text-xl text-muted-foreground mb-8">
             {!bitcoinData ? 'Unable to fetch live Bitcoin price data.' : 'Unable to fetch company data.'} Please try again later.
           </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-lg font-medium"
+          <a
+            href="/companies"
+            className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-lg font-medium inline-block"
           >
             Retry
-          </button>
+          </a>
         </div>
       </div>
     )

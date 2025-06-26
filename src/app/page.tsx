@@ -4,6 +4,8 @@ import dynamic from 'next/dynamic'
 import { Bitcoin, TrendingUp, Building2, PieChart } from 'lucide-react'
 import { formatCurrency, formatNumber } from '@/lib/utils'
 
+export const dynamic = 'force-dynamic'
+
 const Navigation = dynamic(() => import('@/components/Navigation').then(mod => ({ default: mod.Navigation })), {
   ssr: false
 })
@@ -104,12 +106,12 @@ export default async function HomePage() {
           <p className="text-xl text-muted-foreground mb-8">
             Unable to fetch live Bitcoin price data. Please try again later.
           </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-lg font-medium"
+          <a
+            href="/"
+            className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-lg font-medium inline-block"
           >
             Retry
-          </button>
+          </a>
         </div>
       </div>
     )

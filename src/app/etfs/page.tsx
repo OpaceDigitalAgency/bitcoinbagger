@@ -3,6 +3,8 @@ import { ETFsPageClient } from '@/components/ETFsPageClient'
 import { formatCurrency, formatNumber } from '@/lib/utils'
 import { Navigation } from '@/components/Navigation'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: 'Bitcoin Spot ETFs | BitcoinBagger',
   description: 'Track Bitcoin spot ETFs including IBIT, FBTC, GBTC, and BITB. Live holdings, premiums, and NAV data for Bitcoin ETF investments.',
@@ -78,12 +80,12 @@ export default async function ETFsPage() {
           <p className="text-xl text-muted-foreground mb-8">
             {!bitcoinData ? 'Unable to fetch live Bitcoin price data.' : 'Unable to fetch ETF data.'} Please try again later.
           </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-lg font-medium"
+          <a
+            href="/etfs"
+            className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-lg font-medium inline-block"
           >
             Retry
-          </button>
+          </a>
         </div>
       </div>
     )
