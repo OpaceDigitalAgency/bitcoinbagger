@@ -12,9 +12,7 @@ const nextConfig = {
     serverComponentsExternalPackages: ['cheerio']
   },
   // Ensure proper trailing slash handling
-  trailingSlash: false,
-  // Output configuration for Netlify deployment
-  output: 'standalone'
+  trailingSlash: false
 }
 
 module.exports = nextConfig
