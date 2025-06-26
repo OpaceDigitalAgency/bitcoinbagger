@@ -1,1 +1,1 @@
-{"version":1,"functions":{"/api/proxy/iex":{},"/api/proxy/fmp":{},"/api/etfs":{},"/etfs":{},"/":{},"/companies":{}}}
+{"version":1,"functions":{"/api/proxy/iex":{},"/api/proxy/fmp":{},"/api/etfs":{},"/etfs":{},"/companies":{},"/":{}}}
