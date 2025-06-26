@@ -24,8 +24,9 @@ export const metadata: Metadata = {
 
 async function getETFsData() {
   try {
-    // Use relative URL for Netlify Functions
-    const response = await fetch('/.netlify/functions/etfs', {
+    // Use absolute URL for server-side rendering
+    const baseUrl = process.env.NETLIFY_URL || process.env.URL || 'https://bitcoinbagger.netlify.app'
+    const response = await fetch(`${baseUrl}/.netlify/functions/etfs`, {
       next: { revalidate: 300 }
     })
     
@@ -42,8 +43,9 @@ async function getETFsData() {
 
 async function getBitcoinPrice() {
   try {
-    // Use relative URL for Netlify Functions
-    const response = await fetch('/.netlify/functions/bitcoin-price', {
+    // Use absolute URL for server-side rendering
+    const baseUrl = process.env.NETLIFY_URL || process.env.URL || 'https://bitcoinbagger.netlify.app'
+    const response = await fetch(`${baseUrl}/.netlify/functions/bitcoin-price`, {
       next: { revalidate: 300 }
     })
 
