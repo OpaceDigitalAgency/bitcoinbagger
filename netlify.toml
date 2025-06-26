@@ -7,3 +7,15 @@
 
 [build.environment]
   NEXT_PRIVATE_TARGET = "server"
+
+# Ensure API routes work properly
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/___netlify-handler"
+  status = 200
+
+# Handle client-side routing
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
