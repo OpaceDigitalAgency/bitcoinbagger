@@ -1,0 +1,1 @@
+"use strict";exports.id=611,exports.ids=[611],exports.modules={6611:(r,t,a)=>{a.r(t),a.d(t,{Navigation:()=>e});let e=(0,a(8570).createProxy)(String.raw`/Users/davidbryan/Dropbox/Opace-Sales-Marketing/BitcoinBagger/src/components/Navigation.tsx#Navigation`)}};

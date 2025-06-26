@@ -33,7 +33,8 @@ async function getCompaniesData() {
       throw new Error('Failed to fetch companies data')
     }
     
-    return await response.json()
+    const companies = await response.json()
+    return Array.isArray(companies) ? companies : []
   } catch (error) {
     console.error('Error fetching companies:', error)
     return []
