@@ -37,15 +37,26 @@ exports.handler = async (event, context) => {
       throw new Error('Failed to get Bitcoin price from CoinGecko');
     }
 
-    // Fetch live stock prices using Yahoo Finance API (more reliable than Alpha Vantage demo)
+    // Fetch live stock prices using Financial Modeling Prep API (free tier)
     const tickers = ['MSTR', 'TSLA', 'MARA', 'RIOT', 'COIN'];
     const stockPromises = tickers.map(async (ticker) => {
       try {
-        // Using Yahoo Finance API via query1.finance.yahoo.com
-        const response = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1d`);
+        // Using Financial Modeling Prep free API
+        const response = await fetch(`https://financialmodelingprep.com/api/v3/quote-short/${ticker}?apikey=demo`, {
+          headers: {
+            'User-Agent': 'BitcoinBagger/1.0'
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        
         const data = await response.json();
-        const result = data.chart?.result?.[0];
-        const price = result?.meta?.regularMarketPrice || result?.meta?.previousClose;
+        const price = data[0]?.price;
+        
+        console.log(`${ticker}: $${price || 'FAILED'}`);
+        
         return {
           ticker,
           price: price ? parseFloat(price) : null
