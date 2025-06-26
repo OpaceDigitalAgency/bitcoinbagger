@@ -13,8 +13,8 @@ const nextConfig = {
   },
   // Ensure proper trailing slash handling
   trailingSlash: false,
-  // Netlify-specific configuration
-  target: 'serverless'
+  // Output configuration for Netlify deployment
+  output: 'standalone'
 }
 
 module.exports = nextConfig
