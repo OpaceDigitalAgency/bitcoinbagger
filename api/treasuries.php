@@ -1019,29 +1019,42 @@ function estimateETFHoldings($ticker, $companyData) {
 }
 
 try {
+    // Check for cache clearing request
+    $clearCache = isset($_GET['clear_cache']) || isset($_GET['force_refresh']);
+
     // Check cache first
     $cacheKey = 'treasury_companies_data';
     $cacheTime = $_ENV['CACHE_DURATION_COMPANIES'] ?? 86400; // 24 hours
 
-    $cachedData = getCache($cacheKey, $cacheTime);
+    if ($clearCache) {
+        // Clear the cache file
+        $cacheFile = getCacheFile($cacheKey);
+        if (file_exists($cacheFile)) {
+            unlink($cacheFile);
+        }
+    }
 
-    if ($cachedData !== null && !empty($cachedData)) {
-        // Return cached data immediately
-        $response = [
-            'success' => true,
-            'data' => $cachedData,
-            'meta' => [
-                'timestamp' => time(),
-                'datetime' => date('Y-m-d H:i:s'),
-                'source' => 'CACHED_DATA',
-                'cache' => true,
-                'totalCompanies' => count($cachedData),
-                'apis_used' => ['CACHE'],
-                'data_freshness' => 'CACHED_24H'
-            ]
-        ];
-        echo json_encode($response);
-        exit;
+    if (!$clearCache) {
+        $cachedData = getCache($cacheKey, $cacheTime);
+
+        if ($cachedData !== null && !empty($cachedData)) {
+            // Return cached data immediately
+            $response = [
+                'success' => true,
+                'data' => $cachedData,
+                'meta' => [
+                    'timestamp' => time(),
+                    'datetime' => date('Y-m-d H:i:s'),
+                    'source' => 'CACHED_DATA',
+                    'cache' => true,
+                    'totalCompanies' => count($cachedData),
+                    'apis_used' => ['CACHE'],
+                    'data_freshness' => 'CACHED_24H'
+                ]
+            ];
+            echo json_encode($response);
+            exit;
+        }
     }
 
     // If no cache, fetch live data and cache it
