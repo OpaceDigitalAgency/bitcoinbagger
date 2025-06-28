@@ -274,33 +274,15 @@ function fetchLiveETFData() {
 
     $etfData = [];
 
-    // TEMPORARY: If no ETFs discovered, return basic data to test the system
+    // If no ETFs discovered through APIs, use CoinGecko direct approach
     if (empty($etfs)) {
-        return [
-            [
-                'ticker' => 'IBIT',
-                'name' => 'iShares Bitcoin Trust',
-                'btcHeld' => 500000,
-                'sharesOutstanding' => 1200000000,
-                'nav' => 45.50,
-                'price' => 45.75,
-                'premium' => 0.55,
-                'type' => 'etf',
-                'lastUpdated' => date('Y-m-d H:i:s'),
-                'dataSource' => 'FALLBACK_TEST_DATA'
-            ],
-            [
-                'ticker' => 'FBTC',
-                'name' => 'Fidelity Wise Origin Bitcoin Fund',
-                'btcHeld' => 200000,
-                'sharesOutstanding' => 400000000,
-                'nav' => 52.25,
-                'price' => 52.50,
-                'premium' => 0.48,
-                'type' => 'etf',
-                'lastUpdated' => date('Y-m-d H:i:s'),
-                'dataSource' => 'FALLBACK_TEST_DATA'
-            ]
+        // Try to get Bitcoin ETF data directly from CoinGecko
+        $etfs = [
+            'IBIT' => ['name' => 'iShares Bitcoin Trust', 'coingeckoId' => 'ishares-bitcoin-trust', 'type' => 'etf'],
+            'FBTC' => ['name' => 'Fidelity Wise Origin Bitcoin Fund', 'coingeckoId' => 'fidelity-wise-origin-bitcoin-fund', 'type' => 'etf'],
+            'GBTC' => ['name' => 'Grayscale Bitcoin Trust', 'coingeckoId' => 'grayscale-bitcoin-trust', 'type' => 'etf'],
+            'ARKB' => ['name' => 'ARK 21Shares Bitcoin ETF', 'coingeckoId' => 'ark-21shares-bitcoin-etf', 'type' => 'etf'],
+            'BITB' => ['name' => 'Bitwise Bitcoin ETF', 'coingeckoId' => 'bitwise-bitcoin-etf', 'type' => 'etf']
         ];
     }
 

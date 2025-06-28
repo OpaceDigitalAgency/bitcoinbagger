@@ -10,6 +10,7 @@ api/.env
 
 # API Cache (contains live data, regenerated daily)
 api/cache/
+api/cache/*
 cache/
 
 # Archive directory (old files, not needed in repo)
