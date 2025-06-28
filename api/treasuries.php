@@ -612,6 +612,25 @@ function fetchLiveTreasuryData() {
                 $stockPrice = 0;
                 $marketCap = $companyData['mktCap'] ?? 0;
 
+                // If market cap is 0, try to get it from Alpha Vantage as fallback
+                if ($marketCap == 0) {
+                    $avKey = getApiKey('ALPHA_VANTAGE');
+                    if ($avKey && $avKey !== 'your_alpha_vantage_key_here') {
+                        try {
+                            $avUrl = "https://www.alphavantage.co/query?function=OVERVIEW&symbol={$ticker}&apikey={$avKey}";
+                            $avProfile = fetchWithCurl($avUrl, [], true, "av_marketcap_{$ticker}", 86400);
+                            if (!empty($avProfile) && is_array($avProfile)) {
+                                $marketCap = floatval($avProfile['MarketCapitalization'] ?? 0);
+                                if ($marketCap > 0) {
+                                    $companyData['mktCap'] = $marketCap;
+                                }
+                            }
+                        } catch (Exception $avE) {
+                            // Alpha Vantage failed for market cap
+                        }
+                    }
+                }
+
                 // Only fetch stock prices for top 10 companies to avoid rate limits
                 $topTickers = ['MSTR', 'MARA', 'RIOT', 'GLXY', 'TSLA', 'HUT', 'SQ', 'COIN', 'CLSK', 'HIVE'];
                 if (in_array($ticker, $topTickers)) {

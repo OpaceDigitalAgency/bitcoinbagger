@@ -132,12 +132,16 @@ function discoverETFsFromBitcoinETFData() {
         $data = fetchWithCurl($url, [], true, "btcetfdata_all", 3600); // 1 hour cache
 
         if (!empty($data) && is_array($data)) {
-            foreach ($data as $ticker => $etfInfo) {
-                if (is_array($etfInfo) && !empty($etfInfo['name'])) {
+            // Handle BitcoinETFData.com format: {"data": {"TICKER": {...}}}
+            $etfData = $data['data'] ?? $data;
+
+            foreach ($etfData as $ticker => $etfInfo) {
+                if (is_array($etfInfo) && isset($etfInfo['holdings']) && $etfInfo['holdings'] > 0) {
                     $etfs[$ticker] = [
-                        'name' => $etfInfo['name'],
+                        'name' => $etfInfo['name'] ?? $ticker,
                         'type' => 'etf',
-                        'source' => 'BITCOINETFDATA_COM'
+                        'source' => 'BITCOINETFDATA_COM',
+                        'btcHeld' => floatval($etfInfo['holdings'])
                     ];
                 }
             }
@@ -356,17 +360,35 @@ function fetchLiveETFData() {
                 $btcEtfData = fetchWithCurl($btcEtfUrl, [], true, "btcetf_{$ticker}", 3600); // 1 hour cache
 
                 if (!empty($btcEtfData) && is_array($btcEtfData)) {
-                    $etfData[] = [
-                        'ticker' => $ticker,
-                        'name' => $btcEtfData['name'] ?? $info['name'],
-                        'btcHeld' => floatval($btcEtfData['bitcoin_holdings'] ?? $btcEtfData['btc_held'] ?? 0),
-                        'sharesOutstanding' => floatval($btcEtfData['shares_outstanding'] ?? 0),
-                        'lastUpdated' => date('Y-m-d H:i:s'),
-                        'dataSource' => 'BITCOINETFDATA_COM',
-                        'aum' => floatval($btcEtfData['aum'] ?? 0),
-                        'nav' => floatval($btcEtfData['nav'] ?? 0)
-                    ];
-                    continue;
+                    // Handle BitcoinETFData.com response format
+                    $btcHeld = 0;
+                    $etfName = $info['name'];
+
+                    // Check if data is in the expected format: {"data": {"TICKER": {...}}}
+                    if (isset($btcEtfData['data'][$ticker])) {
+                        $etfInfo = $btcEtfData['data'][$ticker];
+                        $btcHeld = floatval($etfInfo['holdings'] ?? 0);
+                        $etfName = $etfInfo['name'] ?? $info['name'];
+                    }
+                    // Or direct format: {"holdings": 123, "name": "..."}
+                    else if (isset($btcEtfData['holdings'])) {
+                        $btcHeld = floatval($btcEtfData['holdings']);
+                        $etfName = $btcEtfData['name'] ?? $info['name'];
+                    }
+
+                    if ($btcHeld > 0) {
+                        $etfData[] = [
+                            'ticker' => $ticker,
+                            'name' => $etfName,
+                            'btcHeld' => $btcHeld,
+                            'sharesOutstanding' => floatval($btcEtfData['shares_outstanding'] ?? 0),
+                            'lastUpdated' => date('Y-m-d H:i:s'),
+                            'dataSource' => 'BITCOINETFDATA_COM',
+                            'aum' => floatval($btcEtfData['aum'] ?? 0),
+                            'nav' => floatval($btcEtfData['nav'] ?? 0)
+                        ];
+                        continue;
+                    }
                 }
             } catch (Exception $btcEtfE) {
                 // BitcoinETFData.com failed, try Finnhub
