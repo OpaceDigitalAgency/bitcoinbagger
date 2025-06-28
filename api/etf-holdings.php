@@ -116,7 +116,8 @@ function fetchLiveETFData() {
             'BRRR' => 10000000      // ~10M shares
         ];
 
-        if (isset($knownShares[$ticker]) && $sharesOutstanding == 0) {
+        // Always use known shares for major ETFs (more reliable than API data)
+        if (isset($knownShares[$ticker])) {
             $sharesOutstanding = $knownShares[$ticker];
         }
 
@@ -133,8 +134,18 @@ function fetchLiveETFData() {
 
         // Calculate premium/discount (if we have NAV and price)
         $premium = 0;
-        if ($nav > 0 && $price > 0 && $nav != $price) {
-            $premium = (($price - $nav) / $nav) * 100;
+        if ($nav > 0 && $price > 0) {
+            // For Bitcoin ETFs, calculate theoretical NAV based on Bitcoin holdings
+            if ($btcPerShare > 0) {
+                $btcPrice = getCurrentBitcoinPrice();
+                $theoreticalNAV = $btcPerShare * $btcPrice;
+                if ($theoreticalNAV > 0) {
+                    $premium = (($price - $theoreticalNAV) / $theoreticalNAV) * 100;
+                }
+            } else if ($nav != $price) {
+                // Use reported NAV if different from price
+                $premium = (($price - $nav) / $nav) * 100;
+            }
         }
 
         // Only include ETFs with meaningful data
@@ -383,6 +394,35 @@ function setCache($key, $data) {
 function getApiKey($provider) {
     global $API_KEYS;
     return $API_KEYS[$provider] ?? '';
+}
+
+// Get current Bitcoin price for calculations
+function getCurrentBitcoinPrice() {
+    static $cachedPrice = null;
+    static $cacheTime = 0;
+
+    // Use cached price if less than 5 minutes old
+    if ($cachedPrice !== null && (time() - $cacheTime) < 300) {
+        return $cachedPrice;
+    }
+
+    try {
+        // Try CoinGecko API
+        $url = 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd';
+        $response = file_get_contents($url);
+        $data = json_decode($response, true);
+
+        if (isset($data['bitcoin']['usd'])) {
+            $cachedPrice = floatval($data['bitcoin']['usd']);
+            $cacheTime = time();
+            return $cachedPrice;
+        }
+    } catch (Exception $e) {
+        // Use fallback price
+    }
+
+    // Emergency fallback - use a reasonable Bitcoin price
+    return 107000; // Approximate current Bitcoin price
 }
 
 // Fetch ETF price with multiple fallbacks including free APIs
