@@ -71,7 +71,7 @@ function fetchStockPrice($ticker) {
     $price = 0;
 
     // Try FMP first (most reliable for stock prices)
-    $fmpKey = getApiKey('FMP_API_KEY');
+    $fmpKey = getApiKey('FMP');
     if ($fmpKey && $fmpKey !== 'REDACTED_API_KEY') {
         try {
             $url = "https://financialmodelingprep.com/api/v3/quote/{$ticker}?apikey={$fmpKey}";
