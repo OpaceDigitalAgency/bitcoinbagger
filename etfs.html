@@ -85,9 +85,11 @@
                     const data = await response.json();
 
                     if (data.data) {
-                        this.etfs = data.data.filter(etf => etf.btcHeld > 0); // Only show ETFs with actual holdings
+                        // Show all ETFs, even if btcHeld is 0 (API limitations)
+                        this.etfs = data.data;
                         this.updateOverviewStats();
                         this.renderETFsTable();
+                        console.log('ETFs loaded:', this.etfs.length);
                     } else {
                         this.showError('No ETF data available - discovery in progress');
                     }

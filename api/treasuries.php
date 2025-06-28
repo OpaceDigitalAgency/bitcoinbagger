@@ -71,8 +71,8 @@ function fetchStockPrice($ticker) {
     $price = 0;
 
     // Try FMP first (most reliable for stock prices)
-    $fmpKey = getApiKey('FMP');
-    if ($fmpKey && $fmpKey !== 'your_fmp_key_here') {
+    $fmpKey = getApiKey('FMP_API_KEY');
+    if ($fmpKey && $fmpKey !== 'REDACTED_API_KEY') {
         try {
             $url = "https://financialmodelingprep.com/api/v3/quote/{$ticker}?apikey={$fmpKey}";
             $data = fetchWithCurl($url);
@@ -569,9 +569,15 @@ function fetchLiveTreasuryData() {
 
             // Only include companies with actual Bitcoin holdings
             if ($btcHeld > 0) {
-                // Use cached stock price (fetched in batch) or 0 if not available
-                $stockPrice = 0; // Will be populated by batch stock price fetching
+                // Get basic stock price for major companies (limited to prevent rate limits)
+                $stockPrice = 0;
                 $marketCap = $companyData['mktCap'] ?? 0;
+
+                // Only fetch stock prices for top 10 companies to avoid rate limits
+                $topTickers = ['MSTR', 'MARA', 'RIOT', 'GLXY', 'TSLA', 'HUT', 'SQ', 'COIN', 'CLSK', 'HIVE'];
+                if (in_array($ticker, $topTickers)) {
+                    $stockPrice = fetchStockPrice($ticker);
+                }
 
                 // Calculate shares outstanding if we have both market cap and stock price
                 $sharesOutstanding = 0;
