@@ -132,8 +132,25 @@ function fetchLiveETFData() {
         $sharesOutstanding = $etfDetails['sharesOutstanding'] ?? 0;
         $aum = $etfDetails['aum'] ?? 0;
 
-        // Try to get real shares outstanding from multiple sources
-        // Don't use hardcoded fallback data - if APIs fail, show N/A
+        // If shares outstanding is still 0, try additional sources
+        if ($sharesOutstanding == 0) {
+            // Try FMP API for shares outstanding
+            $fmpKey = getApiKey('FMP');
+            if ($fmpKey && $fmpKey !== 'REDACTED_API_KEY') {
+                try {
+                    $url = "https://financialmodelingprep.com/api/v3/quote/{$ticker}?apikey={$fmpKey}";
+                    $response = file_get_contents($url);
+                    if ($response !== false) {
+                        $data = json_decode($response, true);
+                        if (is_array($data) && isset($data[0]['sharesOutstanding'])) {
+                            $sharesOutstanding = floatval($data[0]['sharesOutstanding']);
+                        }
+                    }
+                } catch (Exception $e) {
+                    // Continue without shares outstanding data
+                }
+            }
+        }
 
         // Calculate AUM if we have price and shares
         if ($aum == 0 && $price > 0 && $sharesOutstanding > 0) {
@@ -498,6 +515,12 @@ function fetchETFPrice($ticker) {
                     $quote = $data['quoteResponse']['result'][0];
                     $price = floatval($quote['regularMarketPrice'] ?? 0);
                     $sharesOutstanding = floatval($quote['sharesOutstanding'] ?? 0);
+
+                    // Yahoo Finance often returns shares outstanding in millions for ETFs
+                    // Convert to actual shares if the number seems too small
+                    if ($sharesOutstanding > 0 && $sharesOutstanding < 10000) {
+                        $sharesOutstanding = $sharesOutstanding * 1000000; // Convert millions to actual shares
+                    }
                     // For ETFs, NAV is often close to market price
                     $nav = $price;
                 }
