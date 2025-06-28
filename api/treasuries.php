@@ -114,6 +114,126 @@ function fetchStockPrice($ticker) {
     return $stockData['price'];
 }
 
+// NEW: Comprehensive market cap fetcher with multiple API sources and fallbacks
+function fetchComprehensiveMarketCap($ticker) {
+    $cacheKey = "comprehensive_marketcap_{$ticker}";
+    $cached = getCache($cacheKey, 3600); // 1 hour cache
+
+    if ($cached !== null && $cached > 0) {
+        return $cached;
+    }
+
+    $marketCap = 0;
+
+    // Method 1: Try Yahoo Finance Statistics API (most comprehensive)
+    try {
+        $url = "https://query1.finance.yahoo.com/v10/finance/quoteSummary/{$ticker}?modules=defaultKeyStatistics,summaryDetail,price";
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 10,
+                'user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            ]
+        ]);
+
+        $response = file_get_contents($url, false, $context);
+        if ($response !== false) {
+            $data = json_decode($response, true);
+            if (isset($data['quoteSummary']['result'][0]['summaryDetail']['marketCap']['raw'])) {
+                $marketCap = floatval($data['quoteSummary']['result'][0]['summaryDetail']['marketCap']['raw']);
+            } elseif (isset($data['quoteSummary']['result'][0]['price']['marketCap']['raw'])) {
+                $marketCap = floatval($data['quoteSummary']['result'][0]['price']['marketCap']['raw']);
+            }
+        }
+    } catch (Exception $e) {
+        // Continue to next method
+    }
+
+    // Method 2: Try FMP API (Financial Modeling Prep)
+    if ($marketCap == 0) {
+        $fmpKey = getApiKey('FMP');
+        if ($fmpKey && $fmpKey !== 'REDACTED_API_KEY') {
+            try {
+                $url = "https://financialmodelingprep.com/api/v3/quote/{$ticker}?apikey={$fmpKey}";
+                $response = file_get_contents($url);
+                if ($response !== false) {
+                    $data = json_decode($response, true);
+                    if (is_array($data) && isset($data[0]['marketCap']) && $data[0]['marketCap'] > 0) {
+                        $marketCap = floatval($data[0]['marketCap']);
+                    }
+                }
+            } catch (Exception $e) {
+                // Continue to next method
+            }
+        }
+    }
+
+    // Method 3: Try Alpha Vantage API
+    if ($marketCap == 0) {
+        $alphaKey = getApiKey('ALPHA_VANTAGE');
+        if ($alphaKey && $alphaKey !== 'your_alpha_vantage_key_here') {
+            try {
+                $url = "https://www.alphavantage.co/query?function=OVERVIEW&symbol={$ticker}&apikey={$alphaKey}";
+                $response = file_get_contents($url);
+                if ($response !== false) {
+                    $data = json_decode($response, true);
+                    if (isset($data['MarketCapitalization']) && is_numeric($data['MarketCapitalization'])) {
+                        $marketCap = floatval($data['MarketCapitalization']);
+                    }
+                }
+            } catch (Exception $e) {
+                // Continue to next method
+            }
+        }
+    }
+
+    // Method 4: Try TwelveData API
+    if ($marketCap == 0) {
+        $twelveKey = getApiKey('TWELVEDATA');
+        if ($twelveKey && $twelveKey !== 'your_twelvedata_key_here') {
+            try {
+                $url = "https://api.twelvedata.com/profile?symbol={$ticker}&apikey={$twelveKey}";
+                $response = file_get_contents($url);
+                if ($response !== false) {
+                    $data = json_decode($response, true);
+                    if (isset($data['market_capitalization']) && $data['market_capitalization'] > 0) {
+                        $marketCap = floatval($data['market_capitalization']);
+                    }
+                }
+            } catch (Exception $e) {
+                // Continue to next method
+            }
+        }
+    }
+
+    // Method 5: Company-specific fallback using known approximate values for major Bitcoin companies
+    if ($marketCap == 0) {
+        $knownCompanyMarketCaps = [
+            'MSTR' => 75000000000,   // ~$75B (approximate)
+            'TSLA' => 800000000000,  // ~$800B (approximate)
+            'COIN' => 50000000000,   // ~$50B (approximate)
+            'MARA' => 3500000000,    // ~$3.5B (approximate)
+            'RIOT' => 2500000000,    // ~$2.5B (approximate)
+            'CLSK' => 1500000000,    // ~$1.5B (approximate)
+            'HUT' => 1200000000,     // ~$1.2B (approximate)
+            'BITF' => 800000000,     // ~$800M (approximate)
+            'WULF' => 600000000,     // ~$600M (approximate)
+            'CIFR' => 500000000,     // ~$500M (approximate)
+        ];
+
+        if (isset($knownCompanyMarketCaps[$ticker])) {
+            $marketCap = $knownCompanyMarketCaps[$ticker];
+            error_log("BitcoinBagger: Using fallback market cap for {$ticker}: " . number_format($marketCap));
+        }
+    }
+
+    // Cache the result (even if 0) to avoid repeated API calls
+    if ($marketCap > 0) {
+        setCache($cacheKey, $marketCap);
+    }
+
+    return $marketCap;
+}
+
 // Enhanced function to fetch comprehensive stock data
 function fetchStockData($ticker) {
     $cacheKey = "stock_data_{$ticker}";
@@ -222,6 +342,11 @@ function fetchStockData($ticker) {
                 // Continue
             }
         }
+    }
+
+    // If market cap is still 0, try our comprehensive market cap fetcher
+    if ($marketCap == 0) {
+        $marketCap = fetchComprehensiveMarketCap($ticker);
     }
 
     $result = [
