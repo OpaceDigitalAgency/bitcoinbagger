@@ -91,7 +91,7 @@ function fetchStockData($ticker) {
 
     // Try Yahoo Finance first (free, no API key required)
     try {
-        $url = "https://query1.finance.yahoo.com/v7/finance/quote?symbols={$ticker}";
+        $url = "https://query1.finance.yahoo.com/v7/finance/quote?symbols={$ticker}&fields=regularMarketPrice,marketCap,sharesOutstanding,trailingPE,forwardPE";
         $context = stream_context_create([
             'http' => [
                 'timeout' => 8,
@@ -107,6 +107,15 @@ function fetchStockData($ticker) {
                 $price = floatval($quote['regularMarketPrice'] ?? 0);
                 $marketCap = floatval($quote['marketCap'] ?? 0);
                 $sharesOutstanding = floatval($quote['sharesOutstanding'] ?? 0);
+
+                // If marketCap is 0 but we have price and shares, calculate it
+                if ($marketCap == 0 && $price > 0 && $sharesOutstanding > 0) {
+                    $marketCap = $price * $sharesOutstanding;
+                }
+                // If sharesOutstanding is 0 but we have price and marketCap, calculate it
+                if ($sharesOutstanding == 0 && $price > 0 && $marketCap > 0) {
+                    $sharesOutstanding = $marketCap / $price;
+                }
             }
         }
     } catch (Exception $e) {

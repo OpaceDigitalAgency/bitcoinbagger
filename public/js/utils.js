@@ -217,8 +217,8 @@ class Utils {
         const themeToggle = document.getElementById('theme-toggle');
         const themeIcon = document.getElementById('theme-icon');
         
-        // Get saved theme or default to light
-        let currentTheme = localStorage.getItem('theme') || 'light';
+        // Get saved theme or default to dark
+        let currentTheme = localStorage.getItem('theme') || 'dark';
         document.documentElement.setAttribute('data-theme', currentTheme);
         
         // Update icon

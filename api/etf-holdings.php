@@ -57,18 +57,22 @@ function fetchLiveETFData() {
                             $priceData = fetchETFPrice(strtoupper($ticker));
                         }
 
-                        $etfData[] = [
-                            'ticker' => strtoupper($ticker),
-                            'name' => $etfInfo['name'] ?? $ticker . ' Bitcoin ETF',
-                            'btcHeld' => floatval($etfInfo['holdings']),
-                            'sharesOutstanding' => $priceData['sharesOutstanding'] ?: floatval($etfInfo['shares_outstanding'] ?? 0),
-                            'nav' => $priceData['nav'] ?: floatval($etfInfo['nav'] ?? 0),
-                            'price' => $priceData['price'] ?: floatval($etfInfo['price'] ?? 0),
-                            'aum' => floatval($etfInfo['aum'] ?? 0),
-                            'expenseRatio' => floatval($etfInfo['expense_ratio'] ?? 0),
-                            'lastUpdated' => date('Y-m-d H:i:s'),
-                            'dataSource' => 'BITCOINETFDATA_COM_LIVE'
-                        ];
+                        // Only include ETFs where we have price data
+                        $price = $priceData['price'] ?: floatval($etfInfo['price'] ?? 0);
+                        if ($price > 0) {
+                            $etfData[] = [
+                                'ticker' => strtoupper($ticker),
+                                'name' => $etfInfo['name'] ?? $ticker . ' Bitcoin ETF',
+                                'btcHeld' => floatval($etfInfo['holdings']),
+                                'sharesOutstanding' => $priceData['sharesOutstanding'] ?: floatval($etfInfo['shares_outstanding'] ?? 0),
+                                'nav' => $priceData['nav'] ?: floatval($etfInfo['nav'] ?? 0),
+                                'price' => $price,
+                                'aum' => floatval($etfInfo['aum'] ?? 0),
+                                'expenseRatio' => floatval($etfInfo['expense_ratio'] ?? 0),
+                                'lastUpdated' => date('Y-m-d H:i:s'),
+                                'dataSource' => 'BITCOINETFDATA_COM_LIVE'
+                            ];
+                        }
                     }
                 }
 
@@ -226,7 +230,7 @@ function fetchETFPrice($ticker) {
         // Continue to next API
     }
 
-    // Try Yahoo Finance quote API as backup
+    // Try Yahoo Finance quote API as backup (more comprehensive data)
     if ($price == 0) {
         try {
             $url = "https://query1.finance.yahoo.com/v7/finance/quote?symbols={$ticker}";
@@ -246,6 +250,32 @@ function fetchETFPrice($ticker) {
                     $sharesOutstanding = floatval($quote['sharesOutstanding'] ?? 0);
                     // For ETFs, NAV is often close to market price
                     $nav = $price;
+                }
+            }
+        } catch (Exception $e) {
+            // Continue to next API
+        }
+    }
+
+    // If we still don't have price, try the comprehensive quote API
+    if ($price == 0) {
+        try {
+            $url = "https://query1.finance.yahoo.com/v7/finance/quote?symbols={$ticker}&fields=regularMarketPrice,sharesOutstanding,marketCap,navPrice";
+            $context = stream_context_create([
+                'http' => [
+                    'timeout' => 8,
+                    'user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                ]
+            ]);
+
+            $response = file_get_contents($url, false, $context);
+            if ($response !== false) {
+                $data = json_decode($response, true);
+                if (isset($data['quoteResponse']['result'][0])) {
+                    $quote = $data['quoteResponse']['result'][0];
+                    $price = floatval($quote['regularMarketPrice'] ?? 0);
+                    $sharesOutstanding = floatval($quote['sharesOutstanding'] ?? 0);
+                    $nav = floatval($quote['navPrice'] ?? $price);
                 }
             }
         } catch (Exception $e) {
