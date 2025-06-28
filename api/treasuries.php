@@ -561,7 +561,26 @@ function fetchLiveTreasuryData() {
                     $companyData = array_merge($companyData, $profile[0]);
                 }
             } catch (Exception $e) {
-                // Continue with discovered data only
+                // FMP failed (likely rate limit), try Alpha Vantage as fallback
+                $avKey = getApiKey('ALPHA_VANTAGE');
+                if ($avKey && $avKey !== 'your_alpha_vantage_key_here') {
+                    try {
+                        $avUrl = "https://www.alphavantage.co/query?function=OVERVIEW&symbol={$ticker}&apikey={$avKey}";
+                        $avProfile = fetchWithCurl($avUrl, [], true, "av_profile_{$ticker}", 86400);
+                        if (!empty($avProfile) && is_array($avProfile)) {
+                            // Map Alpha Vantage fields to FMP format
+                            $mappedProfile = [
+                                'mktCap' => floatval($avProfile['MarketCapitalization'] ?? 0),
+                                'companyName' => $avProfile['Name'] ?? $ticker,
+                                'industry' => $avProfile['Industry'] ?? 'Technology',
+                                'sector' => $avProfile['Sector'] ?? 'Technology'
+                            ];
+                            $companyData = array_merge($companyData, $mappedProfile);
+                        }
+                    } catch (Exception $avE) {
+                        // Continue with discovered data only
+                    }
+                }
             }
 
             // Get dynamic Bitcoin holdings
