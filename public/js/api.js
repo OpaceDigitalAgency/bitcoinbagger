@@ -65,23 +65,29 @@ class BitcoinAPI {
     const holdings = await this.fetchCompanyBitcoinHoldings();
     const btcPrice = this.bitcoinPrice || (await this.fetchBitcoinPrice()).usd;
 
-    // Use the data from the backend API directly - no need for additional stock price calls
-    // The backend already includes all necessary data
+    // Use the data from the backend API directly - now includes real stock prices
     const companies = holdings.map(h => {
       const btcValue = h.btcHeld * btcPrice;
-      
+
+      // Calculate premium/discount if we have stock price and Bitcoin per share
+      let premium = 0;
+      if (h.stockPrice > 0 && h.bitcoinPerShare > 0) {
+        const impliedBtcPrice = h.stockPrice / h.bitcoinPerShare;
+        premium = ((impliedBtcPrice - btcPrice) / btcPrice) * 100;
+      }
+
       return {
         ticker: h.ticker,
         name: h.name,
         businessModel: h.businessModel,
         btcHeld: h.btcHeld,
         btcValue,
-        stockPrice: 0, // Will be populated by separate stock price service if needed
+        stockPrice: h.stockPrice || 0,
         changePercent: this.bitcoinChange,
-        sharesOutstanding: 0, // Will be populated by separate service if needed
+        sharesOutstanding: h.sharesOutstanding || 0,
         marketCap: h.marketCap || 0,
-        bsp: 0, // Bitcoin per share - calculated when stock data available
-        premium: 0, // Premium calculation - calculated when stock data available
+        bsp: h.bitcoinPerShare || 0, // Bitcoin per share from backend
+        premium: premium, // Premium/discount calculation
         sector: h.sector || 'Technology',
         type: h.type || 'stock'
       };

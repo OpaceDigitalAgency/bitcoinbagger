@@ -3,23 +3,26 @@ header('Content-Type: application/json');
 header('Cache-Control: public, max-age=60'); // 1 minute cache for price
 header('Expires: ' . gmdate('D, d M Y H:i:s', time() + 60) . ' GMT');
 
+// Load environment variables
+if (file_exists(__DIR__ . '/.env')) {
+    $lines = file(__DIR__ . '/.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        if (strpos($line, '=') !== false && strpos($line, '#') !== 0) {
+            list($key, $value) = explode('=', $line, 2);
+            $_ENV[trim($key)] = trim($value);
+        }
+    }
+}
+
 // Real-time Bitcoin price endpoint - separate from treasury data
 // This endpoint is called frequently so uses shorter cache times
 
-// API Keys - CoinGecko PRIMARY, others as fallback
+// API Keys from environment variables
 $API_KEYS = [
-    'COINGECKO' => [
-        'CG-DyXq4yeQFW3Q7P39p4mNYAQz', // Primary - Demo plan
-    ],
-    'FMP' => [
-        'REDACTED_API_KEY', // Fallback
-    ],
-    'ALPHA_VANTAGE' => [
-        'REDACTED_API_KEY', // Fallback
-    ],
-    'TWELVEDATA' => [
-        'REDACTED_API_KEY', // Fallback
-    ]
+    'COINGECKO' => $_ENV['COINGECKO_API_KEY'] ?? '',
+    'FMP' => $_ENV['FMP_API_KEY'] ?? '',
+    'ALPHA_VANTAGE' => $_ENV['ALPHA_VANTAGE_API_KEY'] ?? '',
+    'TWELVEDATA' => $_ENV['TWELVEDATA_API_KEY'] ?? ''
 ];
 
 // Cache directory
@@ -48,8 +51,8 @@ function setCache($key, $data) {
 
 function getApiKey($provider) {
     global $API_KEYS;
-    $keys = $API_KEYS[$provider];
-    return $keys[array_rand($keys)];
+    $key = $API_KEYS[$provider] ?? '';
+    return $key;
 }
 
 function fetchBitcoinPrice() {

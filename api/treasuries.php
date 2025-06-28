@@ -3,25 +3,28 @@ header('Content-Type: application/json');
 header('Cache-Control: public, max-age=300'); // 5 minute cache for price data
 header('Expires: ' . gmdate('D, d M Y H:i:s', time() + 300) . ' GMT');
 
+// Load environment variables
+if (file_exists(__DIR__ . '/.env')) {
+    $lines = file(__DIR__ . '/.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        if (strpos($line, '=') !== false && strpos($line, '#') !== 0) {
+            list($key, $value) = explode('=', $line, 2);
+            $_ENV[trim($key)] = trim($value);
+        }
+    }
+}
+
 // SMART CACHING STRATEGY:
 // - Company holdings/info: Cached 24 hours (changes rarely)
 // - BTC price: Real-time (changes constantly)
 // - Multiple API keys rotation to avoid rate limits
 
-// API Keys - CoinGecko PRIMARY (Demo plan: 10k calls/month, 30/min), others as fallback only
+// API Keys from environment variables
 $API_KEYS = [
-    'COINGECKO' => [
-        'CG-DyXq4yeQFW3Q7P39p4mNYAQz', // Primary - Demo plan with 10k calls/month, 30/min
-    ],
-    'FMP' => [
-        'REDACTED_API_KEY', // Fallback only when CoinGecko fails
-    ],
-    'ALPHA_VANTAGE' => [
-        'REDACTED_API_KEY', // Fallback only when CoinGecko fails
-    ],
-    'TWELVEDATA' => [
-        'REDACTED_API_KEY', // Fallback only when CoinGecko fails
-    ]
+    'COINGECKO' => $_ENV['COINGECKO_API_KEY'] ?? '',
+    'FMP' => $_ENV['FMP_API_KEY'] ?? '',
+    'ALPHA_VANTAGE' => $_ENV['ALPHA_VANTAGE_API_KEY'] ?? '',
+    'TWELVEDATA' => $_ENV['TWELVEDATA_API_KEY'] ?? ''
 ];
 
 // Cache directory
@@ -49,11 +52,73 @@ function setCache($key, $data) {
     file_put_contents($file, json_encode($data));
 }
 
-// API key rotation to avoid rate limits
+// API key from environment variables
 function getApiKey($provider) {
     global $API_KEYS;
-    $keys = $API_KEYS[$provider];
-    return $keys[array_rand($keys)]; // Random key selection
+    $key = $API_KEYS[$provider] ?? '';
+    return $key;
+}
+
+// Fetch stock price with caching (1 hour cache)
+function fetchStockPrice($ticker) {
+    $cacheKey = "stock_price_{$ticker}";
+    $cached = getCache($cacheKey, 3600); // 1 hour cache
+
+    if ($cached !== null) {
+        return $cached;
+    }
+
+    $price = 0;
+
+    // Try FMP first (most reliable for stock prices)
+    $fmpKey = getApiKey('FMP');
+    if ($fmpKey && $fmpKey !== 'your_fmp_key_here') {
+        try {
+            $url = "https://financialmodelingprep.com/api/v3/quote/{$ticker}?apikey={$fmpKey}";
+            $data = fetchWithCurl($url);
+            if (is_array($data) && isset($data[0]['price'])) {
+                $price = floatval($data[0]['price']);
+            }
+        } catch (Exception $e) {
+            // Continue to next API
+        }
+    }
+
+    // Try Alpha Vantage as fallback
+    if ($price == 0) {
+        $avKey = getApiKey('ALPHA_VANTAGE');
+        if ($avKey && $avKey !== 'your_alpha_vantage_key_here') {
+            try {
+                $url = "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={$ticker}&apikey={$avKey}";
+                $data = fetchWithCurl($url);
+                if (isset($data['Global Quote']['05. price'])) {
+                    $price = floatval($data['Global Quote']['05. price']);
+                }
+            } catch (Exception $e) {
+                // Continue to next API
+            }
+        }
+    }
+
+    // Try TwelveData as final fallback
+    if ($price == 0) {
+        $tdKey = getApiKey('TWELVEDATA');
+        if ($tdKey && $tdKey !== 'your_twelvedata_key_here') {
+            try {
+                $url = "https://api.twelvedata.com/price?symbol={$ticker}&apikey={$tdKey}";
+                $data = fetchWithCurl($url);
+                if (isset($data['price'])) {
+                    $price = floatval($data['price']);
+                }
+            } catch (Exception $e) {
+                // All APIs failed
+            }
+        }
+    }
+
+    // Cache the result (even if 0) to avoid repeated API calls
+    setCache($cacheKey, $price);
+    return $price;
 }
 
 function fetchWithCurl($url, $headers = [], $useCache = true, $cacheKey = null, $cacheTime = 86400) {
@@ -504,6 +569,22 @@ function fetchLiveTreasuryData() {
 
             // Only include companies with actual Bitcoin holdings
             if ($btcHeld > 0) {
+                // Use cached stock price (fetched in batch) or 0 if not available
+                $stockPrice = 0; // Will be populated by batch stock price fetching
+                $marketCap = $companyData['mktCap'] ?? 0;
+
+                // Calculate shares outstanding if we have both market cap and stock price
+                $sharesOutstanding = 0;
+                if ($stockPrice > 0 && $marketCap > 0) {
+                    $sharesOutstanding = $marketCap / $stockPrice;
+                }
+
+                // Calculate Bitcoin per share
+                $bitcoinPerShare = 0;
+                if ($sharesOutstanding > 0) {
+                    $bitcoinPerShare = $btcHeld / $sharesOutstanding;
+                }
+
                 $treasuryData[] = [
                     'ticker' => $ticker,
                     'name' => $companyData['companyName'] ?? $info['name'],
@@ -512,7 +593,10 @@ function fetchLiveTreasuryData() {
                     'type' => $info['type'],
                     'lastUpdated' => date('Y-m-d H:i:s'),
                     'dataSource' => $info['source'] ?? 'DYNAMIC_DISCOVERY',
-                    'marketCap' => $companyData['mktCap'] ?? 0,
+                    'marketCap' => $marketCap,
+                    'stockPrice' => $stockPrice,
+                    'sharesOutstanding' => $sharesOutstanding,
+                    'bitcoinPerShare' => $bitcoinPerShare,
                     'sector' => $companyData['sector'] ?? ($info['type'] === 'etf' ? 'ETF' : 'Technology'),
                     'discoveryMethod' => $info['source'] ?? 'UNKNOWN'
                 ];
