@@ -462,12 +462,40 @@ function estimateSharesOutstanding($ticker) {
 }
 
 try {
+    // Check cache first
+    $cacheKey = 'etf_holdings_data';
+    $cacheTime = $_ENV['CACHE_DURATION_ETFS'] ?? 86400; // 24 hours
+
+    $cachedData = getCache($cacheKey, $cacheTime);
+
+    if ($cachedData !== null) {
+        // Return cached data immediately
+        $response = [
+            'data' => $cachedData,
+            'meta' => [
+                'timestamp' => time(),
+                'datetime' => date('Y-m-d H:i:s'),
+                'source' => 'CACHED_DATA',
+                'cache' => true,
+                'totalETFs' => count($cachedData),
+                'apis_used' => ['CACHE'],
+                'data_freshness' => 'CACHED_24H'
+            ]
+        ];
+        echo json_encode($response);
+        exit;
+    }
+
+    // If no cache, fetch live data and cache it
     $liveData = fetchLiveETFData();
 
     // Sort by Bitcoin holdings (descending)
     usort($liveData, function($a, $b) {
         return $b['btcHeld'] - $a['btcHeld'];
     });
+
+    // Cache the data for future requests
+    setCache($cacheKey, $liveData);
 
     $response = [
         'data' => $liveData,
@@ -478,7 +506,7 @@ try {
             'cache' => false,
             'totalETFs' => count($liveData),
             'apis_used' => ['FMP', 'ALPHA_VANTAGE', 'TWELVEDATA'],
-            'data_freshness' => 'REAL_TIME'
+            'data_freshness' => 'REAL_TIME_CACHED'
         ]
     ];
 

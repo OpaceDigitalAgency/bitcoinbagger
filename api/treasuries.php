@@ -705,12 +705,40 @@ function estimateETFHoldings($ticker, $companyData) {
 }
 
 try {
+    // Check cache first
+    $cacheKey = 'treasury_companies_data';
+    $cacheTime = $_ENV['CACHE_DURATION_COMPANIES'] ?? 86400; // 24 hours
+
+    $cachedData = getCache($cacheKey, $cacheTime);
+
+    if ($cachedData !== null) {
+        // Return cached data immediately
+        $response = [
+            'data' => $cachedData,
+            'meta' => [
+                'timestamp' => time(),
+                'datetime' => date('Y-m-d H:i:s'),
+                'source' => 'CACHED_DATA',
+                'cache' => true,
+                'totalCompanies' => count($cachedData),
+                'apis_used' => ['CACHE'],
+                'data_freshness' => 'CACHED_24H'
+            ]
+        ];
+        echo json_encode($response);
+        exit;
+    }
+
+    // If no cache, fetch live data and cache it
     $liveData = fetchLiveTreasuryData();
 
     // Sort by Bitcoin holdings (descending)
     usort($liveData, function($a, $b) {
         return $b['btcHeld'] - $a['btcHeld'];
     });
+
+    // Cache the data for future requests
+    setCache($cacheKey, $liveData);
 
     $response = [
         'data' => $liveData,
@@ -721,7 +749,7 @@ try {
             'cache' => false,
             'totalCompanies' => count($liveData),
             'apis_used' => ['FMP', 'ALPHA_VANTAGE', 'TWELVEDATA'],
-            'data_freshness' => 'REAL_TIME'
+            'data_freshness' => 'REAL_TIME_CACHED'
         ]
     ];
 
