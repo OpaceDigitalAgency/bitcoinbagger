@@ -529,30 +529,44 @@ function fetchETFPrice($ticker) {
 }
 
 try {
+    // Check for cache clearing request
+    $clearCache = isset($_GET['clear_cache']) || isset($_GET['force_refresh']);
+
     // Check cache first (1 hour cache for ETF data)
     $cacheKey = 'etf_holdings_data';
-    $cachedData = getCache($cacheKey, 3600);
 
-    if ($cachedData !== null && !empty($cachedData)) {
-        // Calculate totals from cached data
-        $totalBTC = array_sum(array_column($cachedData, 'btcHeld'));
-        $totalAUM = array_sum(array_column($cachedData, 'aum'));
+    if ($clearCache) {
+        // Clear the cache file
+        $cacheFile = getCacheFile($cacheKey);
+        if (file_exists($cacheFile)) {
+            unlink($cacheFile);
+        }
+    }
 
-        echo json_encode([
-            'success' => true,
-            'data' => $cachedData,
-            'meta' => [
-                'timestamp' => time(),
-                'datetime' => date('Y-m-d H:i:s'),
-                'source' => 'CACHED_ETF_DATA',
-                'cache' => true,
-                'totalETFs' => count($cachedData),
-                'totalBTC' => $totalBTC,
-                'totalAUM' => $totalAUM,
-                'data_freshness' => 'CACHED_1H'
-            ]
-        ]);
-        exit;
+    if (!$clearCache) {
+        $cachedData = getCache($cacheKey, 3600);
+
+        if ($cachedData !== null && !empty($cachedData)) {
+            // Calculate totals from cached data
+            $totalBTC = array_sum(array_column($cachedData, 'btcHeld'));
+            $totalAUM = array_sum(array_column($cachedData, 'aum'));
+
+            echo json_encode([
+                'success' => true,
+                'data' => $cachedData,
+                'meta' => [
+                    'timestamp' => time(),
+                    'datetime' => date('Y-m-d H:i:s'),
+                    'source' => 'CACHED_ETF_DATA',
+                    'cache' => true,
+                    'totalETFs' => count($cachedData),
+                    'totalBTC' => $totalBTC,
+                    'totalAUM' => $totalAUM,
+                    'data_freshness' => 'CACHED_1H'
+                ]
+            ]);
+            exit;
+        }
     }
 
     // Fetch fresh data
