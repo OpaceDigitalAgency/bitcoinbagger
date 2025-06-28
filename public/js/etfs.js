@@ -88,8 +88,8 @@ function updateBitcoinPriceNav(bitcoin) {
 
 function updateOverviewStats(bitcoin, etfs) {
     const totalBTC = etfs.reduce((sum, etf) => sum + (etf.btcHeld || 0), 0);
-    const totalAUM = totalBTC * bitcoin.usd;
-    const avgPremium = etfs.length > 0 ? etfs.reduce((sum, etf) => sum + (etf.premiumDiscount || 0), 0) / etfs.length : 0;
+    const totalAUM = etfs.reduce((sum, etf) => sum + (etf.aum || 0), 0);
+    const avgPremium = etfs.length > 0 ? etfs.reduce((sum, etf) => sum + (etf.premium || 0), 0) / etfs.length : 0;
 
     Utils.updateElement('total-etf-holdings', `${Utils.formatNumber(totalBTC)} BTC`);
     Utils.updateElement('combined-aum', Utils.formatCurrency(totalAUM));
@@ -112,18 +112,26 @@ function updateETFsTable(etfs) {
                 </div>
             </td>
             <td class="text-right">${Utils.formatNumber(etf.btcHeld)} BTC</td>
-            <td class="text-right">${Utils.formatNumber(etf.sharesOutstanding || 0)}</td>
-            <td class="text-right">${Utils.formatNumber(etf.btcPerShare || 0, 6)}</td>
+            <td class="text-right">
+                ${etf.sharesOutstanding > 0 ? Utils.formatNumber(etf.sharesOutstanding) : 'N/A'}
+            </td>
+            <td class="text-right">
+                ${etf.btcPerShare > 0 ? Utils.formatNumber(etf.btcPerShare, 6) : 'N/A'}
+            </td>
             <td class="text-right">
                 <div class="price-info">
-                    <span>${Utils.formatCurrency(etf.price || 0)}</span>
+                    <span>${etf.price > 0 ? Utils.formatCurrency(etf.price) : 'N/A'}</span>
                 </div>
             </td>
-            <td class="text-right">${Utils.formatCurrency(etf.nav || 0)}</td>
             <td class="text-right">
-                <span class="${(etf.premiumDiscount || 0) >= 0 ? 'positive' : 'negative'}">
-                    ${Utils.formatPercentage(etf.premiumDiscount || 0)}
-                </span>
+                ${etf.nav > 0 ? Utils.formatCurrency(etf.nav) : 'N/A'}
+            </td>
+            <td class="text-right">
+                ${etf.premium !== 0 ?
+                    `<span class="${etf.premium >= 0 ? 'positive' : 'negative'}">
+                        ${Utils.formatPercentage(etf.premium)}
+                    </span>` : 'N/A'
+                }
             </td>
         </tr>
     `).join('');

@@ -67,6 +67,49 @@ function getApiKey($provider) {
     return $key;
 }
 
+// Get current Bitcoin price for calculations
+function getCurrentBitcoinPrice() {
+    static $cachedPrice = null;
+    static $cacheTime = 0;
+
+    // Use cached price if less than 5 minutes old
+    if ($cachedPrice !== null && (time() - $cacheTime) < 300) {
+        return $cachedPrice;
+    }
+
+    try {
+        // Try to get Bitcoin price from our own API first
+        $response = file_get_contents(__DIR__ . '/../api/btc-price.php');
+        $data = json_decode($response, true);
+
+        if (isset($data['success']) && $data['success'] && isset($data['data']['usd'])) {
+            $cachedPrice = floatval($data['data']['usd']);
+            $cacheTime = time();
+            return $cachedPrice;
+        }
+    } catch (Exception $e) {
+        // Fallback to direct API call
+    }
+
+    // Fallback: Direct CoinGecko call
+    try {
+        $url = 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd';
+        $response = file_get_contents($url);
+        $data = json_decode($response, true);
+
+        if (isset($data['bitcoin']['usd'])) {
+            $cachedPrice = floatval($data['bitcoin']['usd']);
+            $cacheTime = time();
+            return $cachedPrice;
+        }
+    } catch (Exception $e) {
+        // Use fallback price
+    }
+
+    // Emergency fallback - use a reasonable Bitcoin price
+    return 107000; // Approximate current Bitcoin price
+}
+
 // Fetch stock price with caching and multiple free APIs
 function fetchStockPrice($ticker) {
     $cacheKey = "stock_price_{$ticker}";
@@ -710,6 +753,20 @@ function fetchLiveTreasuryData() {
                     $bitcoinPerShare = $btcHeld / $sharesOutstanding;
                 }
 
+                // Calculate BSP (Bitcoin per Share Price) - the value of Bitcoin holdings per share
+                $bsp = 0;
+                if ($bitcoinPerShare > 0) {
+                    // Get current Bitcoin price
+                    $btcPrice = getCurrentBitcoinPrice();
+                    $bsp = $bitcoinPerShare * $btcPrice;
+                }
+
+                // Calculate premium/discount - how much the stock trades above/below its Bitcoin value
+                $premium = 0;
+                if ($stockPrice > 0 && $bsp > 0) {
+                    $premium = (($stockPrice - $bsp) / $bsp) * 100;
+                }
+
                 // Fix company names for numeric IDs
                 global $COMPANY_NAME_MAPPING;
                 $displayName = $companyData['companyName'] ?? $info['name'];
@@ -732,6 +789,8 @@ function fetchLiveTreasuryData() {
                     'stockPrice' => $stockPrice,
                     'sharesOutstanding' => $sharesOutstanding,
                     'bitcoinPerShare' => $bitcoinPerShare,
+                    'bsp' => $bsp,
+                    'premium' => $premium,
                     'sector' => $companyData['sector'] ?? ($info['type'] === 'etf' ? 'ETF' : 'Technology'),
                     'discoveryMethod' => $info['source'] ?? 'UNKNOWN'
                 ];

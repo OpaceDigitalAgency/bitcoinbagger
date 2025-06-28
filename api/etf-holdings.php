@@ -16,86 +16,133 @@ if (file_exists(__DIR__ . '/.env')) {
 
 function fetchLiveETFData() {
     $etfData = [];
-    $sources = [
-        'bitcoinetfdata' => [
-            'url' => 'https://btcetfdata.com/v1/current.json',
-            'priority' => 1
-        ],
-        'coingecko_etf' => [
-            'url' => 'https://api.coingecko.com/api/v3/search?query=bitcoin%20etf',
-            'priority' => 2
-        ]
+
+    // COMPREHENSIVE BITCOIN ETF LIST - All known Bitcoin ETFs
+    $bitcoinETFs = [
+        // US Spot Bitcoin ETFs (Approved January 2024)
+        'IBIT' => 'iShares Bitcoin Trust',
+        'FBTC' => 'Fidelity Wise Origin Bitcoin Fund',
+        'GBTC' => 'Grayscale Bitcoin Trust',
+        'ARKB' => 'ARK 21Shares Bitcoin ETF',
+        'BITB' => 'Bitwise Bitcoin ETF',
+        'BTCO' => 'Invesco Galaxy Bitcoin ETF',
+        'HODL' => 'VanEck Bitcoin Trust',
+        'BRRR' => 'Valkyrie Bitcoin Fund',
+        'EZBC' => 'Franklin Bitcoin ETF',
+        'DEFI' => 'Hashdex Bitcoin ETF',
+        'BTCW' => 'WisdomTree Bitcoin Fund',
+
+        // Grayscale Mini Trust
+        'BTC' => 'Grayscale Bitcoin Mini Trust',
+
+        // Canadian Bitcoin ETFs
+        'BTCC' => 'Purpose Bitcoin ETF',
+        'EBIT' => 'Evolve Bitcoin ETF',
+        'QBTC' => 'Accelerate Bitcoin ETF',
+
+        // European Bitcoin ETFs
+        'BTCE' => 'ETC Group Physical Bitcoin',
+        'SBTC' => 'VanEck Bitcoin ETN',
+        '21XB' => '21Shares Bitcoin ETP'
     ];
 
-    // Try primary source: BitcoinETFData.com
-    foreach ($sources as $sourceName => $config) {
-        try {
-            $context = stream_context_create([
-                'http' => [
-                    'timeout' => 10,
-                    'user_agent' => 'BitcoinBagger/1.0'
-                ]
-            ]);
+    // Step 1: Try to get Bitcoin holdings data from btcetfdata.com
+    $holdingsData = [];
+    try {
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 10,
+                'user_agent' => 'BitcoinBagger/1.0'
+            ]
+        ]);
 
-            $response = file_get_contents($config['url'], false, $context);
-            if ($response === false) {
-                throw new Exception("Failed to fetch from {$sourceName}");
-            }
-
+        $response = file_get_contents('https://btcetfdata.com/v1/current.json', false, $context);
+        if ($response !== false) {
             $data = json_decode($response, true);
-            if (json_last_error() !== JSON_ERROR_NONE) {
-                throw new Exception("Invalid JSON from {$sourceName}");
-            }
 
-            if ($sourceName === 'bitcoinetfdata' && !empty($data) && isset($data['data'])) {
+            if (!empty($data) && isset($data['data'])) {
                 foreach ($data['data'] as $ticker => $etfInfo) {
                     if (isset($etfInfo['holdings']) && $etfInfo['holdings'] > 0) {
-                        // Fetch live price data for major ETFs
-                        $priceData = ['price' => 0, 'nav' => 0];
-                        $majorETFs = ['IBIT', 'FBTC', 'GBTC', 'ARKB', 'BITB'];
-                        if (in_array(strtoupper($ticker), $majorETFs)) {
-                            $priceData = fetchETFPrice(strtoupper($ticker));
-                        }
-
-                        $price = $priceData['price'] ?: floatval($etfInfo['price'] ?? 0);
-                        $nav = $priceData['nav'] ?: floatval($etfInfo['nav'] ?? 0);
-                        $aum = floatval($etfInfo['aum'] ?? 0);
-                        $sharesOutstanding = $priceData['sharesOutstanding'] ?: floatval($etfInfo['shares_outstanding'] ?? 0);
-
-                        // Calculate shares outstanding from AUM and price if not available
-                        if ($sharesOutstanding == 0 && $aum > 0 && $price > 0) {
-                            $sharesOutstanding = $aum / $price;
-                        }
-
-                        // Use price as NAV if NAV not available
-                        if ($nav == 0 && $price > 0) {
-                            $nav = $price;
-                        }
-
-                        $etfData[] = [
-                            'ticker' => strtoupper($ticker),
-                            'name' => $etfInfo['name'] ?? $ticker . ' Bitcoin ETF',
-                            'btcHeld' => floatval($etfInfo['holdings']),
-                            'sharesOutstanding' => $sharesOutstanding,
-                            'nav' => $nav,
-                            'price' => $price,
-                            'aum' => $aum,
-                            'expenseRatio' => floatval($etfInfo['expense_ratio'] ?? 0),
-                            'lastUpdated' => date('Y-m-d H:i:s'),
-                            'dataSource' => 'BITCOINETFDATA_COM_LIVE'
+                        $holdingsData[strtoupper($ticker)] = [
+                            'name' => $etfInfo['name'] ?? ($bitcoinETFs[strtoupper($ticker)] ?? $ticker . ' Bitcoin ETF'),
+                            'btcHeld' => floatval($etfInfo['holdings'])
                         ];
                     }
                 }
-
-                if (!empty($etfData)) {
-                    return $etfData; // Success with primary source
-                }
             }
-
-        } catch (Exception $e) {
-            error_log("ETF data source {$sourceName} failed: " . $e->getMessage());
-            continue;
         }
+    } catch (Exception $e) {
+        error_log("Bitcoin ETF holdings data failed: " . $e->getMessage());
+    }
+
+    // Step 2: Try ETFdb.com API for comprehensive ETF data
+    $etfdbData = fetchETFdbBitcoinETFs();
+
+    // Step 3: Combine all known Bitcoin ETFs with available data
+    foreach ($bitcoinETFs as $ticker => $name) {
+        // Get Bitcoin holdings (from btcetfdata.com or fallback)
+        $btcHeld = 0;
+        $etfName = $name;
+
+        if (isset($holdingsData[$ticker])) {
+            $btcHeld = $holdingsData[$ticker]['btcHeld'];
+            $etfName = $holdingsData[$ticker]['name'];
+        }
+
+        // Get comprehensive ETF data (price, shares, NAV, etc.)
+        $etfDetails = [];
+        if (isset($etfdbData[$ticker])) {
+            $etfDetails = $etfdbData[$ticker];
+        } else {
+            // Fallback to individual price lookup
+            $etfDetails = fetchETFPrice($ticker);
+        }
+
+        // Calculate additional metrics
+        $price = $etfDetails['price'] ?? 0;
+        $nav = $etfDetails['nav'] ?? $price; // NAV often equals price for ETFs
+        $sharesOutstanding = $etfDetails['sharesOutstanding'] ?? 0;
+        $aum = $etfDetails['aum'] ?? 0;
+
+        // Calculate AUM if we have price and shares
+        if ($aum == 0 && $price > 0 && $sharesOutstanding > 0) {
+            $aum = $price * $sharesOutstanding;
+        }
+
+        // Calculate BTC per share
+        $btcPerShare = 0;
+        if ($btcHeld > 0 && $sharesOutstanding > 0) {
+            $btcPerShare = $btcHeld / $sharesOutstanding;
+        }
+
+        // Calculate premium/discount (if we have NAV and price)
+        $premium = 0;
+        if ($nav > 0 && $price > 0 && $nav != $price) {
+            $premium = (($price - $nav) / $nav) * 100;
+        }
+
+        // Only include ETFs with meaningful data
+        if ($btcHeld > 0 || $price > 0) {
+            $etfData[] = [
+                'ticker' => $ticker,
+                'name' => $etfName,
+                'btcHeld' => $btcHeld,
+                'sharesOutstanding' => $sharesOutstanding,
+                'nav' => $nav,
+                'price' => $price,
+                'aum' => $aum,
+                'btcPerShare' => $btcPerShare,
+                'premium' => $premium,
+                'expenseRatio' => $etfDetails['expenseRatio'] ?? 0,
+                'volume' => $etfDetails['volume'] ?? 0,
+                'lastUpdated' => date('Y-m-d H:i:s'),
+                'dataSource' => isset($holdingsData[$ticker]) ? 'BITCOINETFDATA_COM_LIVE' : 'COMPREHENSIVE_LOOKUP'
+            ];
+        }
+    }
+
+    if (!empty($etfData)) {
+        return $etfData;
     }
 
     // If all API sources fail, use known ETF data with realistic holdings
@@ -157,6 +204,117 @@ function fetchLiveETFData() {
     }
 
     return $etfData;
+}
+
+// NEW: Fetch Bitcoin ETFs from ETFdb.com API
+function fetchETFdbBitcoinETFs() {
+    $etfdbData = [];
+
+    try {
+        // ETFdb.com API endpoint for Bitcoin ETFs
+        $url = 'https://etfdb.com/api/screener/';
+
+        // Search for Bitcoin-related ETFs
+        $payload = [
+            'page' => 1,
+            'per_page' => 50,
+            'sort_by' => 'assets',
+            'sort_direction' => 'desc',
+            'only' => ['meta', 'data'],
+            'tab' => 'overview'
+        ];
+
+        $context = stream_context_create([
+            'http' => [
+                'method' => 'POST',
+                'header' => [
+                    'Content-Type: application/json',
+                    'User-Agent: BitcoinBagger/1.0'
+                ],
+                'content' => json_encode($payload),
+                'timeout' => 15
+            ]
+        ]);
+
+        $response = file_get_contents($url, false, $context);
+        if ($response === false) {
+            throw new Exception("Failed to fetch from ETFdb.com");
+        }
+
+        $data = json_decode($response, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new Exception("Invalid JSON from ETFdb.com");
+        }
+
+        if (isset($data['data']) && is_array($data['data'])) {
+            foreach ($data['data'] as $etf) {
+                $symbol = $etf['symbol']['text'] ?? '';
+                $name = $etf['name']['text'] ?? '';
+
+                // Filter for Bitcoin-related ETFs
+                if (stripos($name, 'bitcoin') !== false ||
+                    in_array($symbol, ['IBIT', 'FBTC', 'GBTC', 'ARKB', 'BITB', 'BTCO', 'HODL', 'BRRR', 'BTC', 'BTCC'])) {
+
+                    // Parse price and assets
+                    $price = floatval(str_replace(['$', ','], '', $etf['price'] ?? '0'));
+                    $assets = parseAssetValue($etf['assets'] ?? '0');
+                    $volume = parseVolumeValue($etf['average_volume'] ?? '0');
+
+                    // Calculate shares outstanding from AUM and price
+                    $sharesOutstanding = 0;
+                    if ($price > 0 && $assets > 0) {
+                        $sharesOutstanding = $assets / $price;
+                    }
+
+                    $etfdbData[$symbol] = [
+                        'name' => $name,
+                        'price' => $price,
+                        'nav' => $price, // ETFdb doesn't provide separate NAV
+                        'aum' => $assets,
+                        'sharesOutstanding' => $sharesOutstanding,
+                        'volume' => $volume,
+                        'ytd' => parsePercentage($etf['ytd'] ?? '0%'),
+                        'expenseRatio' => 0, // Would need separate API call
+                        'dataSource' => 'ETFDB_COM'
+                    ];
+                }
+            }
+        }
+
+    } catch (Exception $e) {
+        error_log("ETFdb.com API failed: " . $e->getMessage());
+    }
+
+    return $etfdbData;
+}
+
+// Helper function to parse asset values like "$23,740.88" or "$23.74B"
+function parseAssetValue($assetStr) {
+    $assetStr = str_replace(['$', ','], '', $assetStr);
+    $multiplier = 1;
+
+    if (stripos($assetStr, 'B') !== false) {
+        $multiplier = 1000000000; // Billion
+        $assetStr = str_replace(['B', 'b'], '', $assetStr);
+    } elseif (stripos($assetStr, 'M') !== false) {
+        $multiplier = 1000000; // Million
+        $assetStr = str_replace(['M', 'm'], '', $assetStr);
+    } elseif (stripos($assetStr, 'K') !== false) {
+        $multiplier = 1000; // Thousand
+        $assetStr = str_replace(['K', 'k'], '', $assetStr);
+    }
+
+    return floatval($assetStr) * $multiplier;
+}
+
+// Helper function to parse volume values
+function parseVolumeValue($volumeStr) {
+    return parseAssetValue($volumeStr); // Same logic
+}
+
+// Helper function to parse percentage values
+function parsePercentage($percentStr) {
+    return floatval(str_replace('%', '', $percentStr));
 }
 
 // Load environment variables
