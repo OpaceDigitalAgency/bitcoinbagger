@@ -323,6 +323,11 @@ function fetchLiveETFData() {
             $profileUrl = "https://financialmodelingprep.com/api/v3/etf/profile/{$ticker}?apikey={$apiKey}";
             $profile = fetchWithCurl($profileUrl, [], true, "etf_profile_{$ticker}", 86400);
 
+            $btcHeld = 0;
+            $etfName = $info['name'];
+            $sharesOutstanding = 0;
+            $dataSource = 'UNKNOWN';
+
             if (!empty($profile) && is_array($profile) && isset($profile[0])) {
                 $etfProfile = $profile[0];
 
@@ -338,19 +343,28 @@ function fetchLiveETFData() {
                 // Calculate Bitcoin holdings and shares outstanding
                 $btcHeld = $info['btcHeld'] ?? estimateETFBitcoinHoldings($ticker, $etfProfile, $holdings);
                 $sharesOutstanding = $etfProfile['sharesOutstanding'] ?? estimateSharesOutstanding($ticker);
-
-                $etfData[] = [
-                    'ticker' => $ticker,
-                    'name' => $etfProfile['name'] ?? $info['name'],
-                    'btcHeld' => $btcHeld,
-                    'sharesOutstanding' => $sharesOutstanding,
-                    'lastUpdated' => date('Y-m-d H:i:s'),
-                    'dataSource' => 'FMP_LIVE_API',
-                    'nav' => $etfProfile['nav'] ?? 0,
-                    'aum' => $etfProfile['aum'] ?? 0,
-                    'expenseRatio' => $etfProfile['expenseRatio'] ?? 0
-                ];
+                $etfName = $etfProfile['name'] ?? $info['name'];
+                $dataSource = 'FMP_LIVE_API';
             }
+
+            // If FMP didn't provide Bitcoin holdings (rate limited or no data), try fallbacks
+            if ($btcHeld == 0) {
+                $dataSource = 'FALLBACK_NEEDED';
+            }
+
+            // Create ETF entry with FMP data (or prepare for fallback)
+            $etfData[] = [
+                'ticker' => $ticker,
+                'name' => $etfName,
+                'btcHeld' => $btcHeld,
+                'sharesOutstanding' => $sharesOutstanding,
+                'lastUpdated' => date('Y-m-d H:i:s'),
+                'dataSource' => $dataSource,
+                'nav' => $profile[0]['nav'] ?? 0,
+                'aum' => $profile[0]['aum'] ?? 0,
+                'expenseRatio' => $profile[0]['expenseRatio'] ?? 0
+            ];
+
         } catch (Exception $e) {
             // FMP failed (likely rate limit), try specialized ETF data sources
 
@@ -481,7 +495,120 @@ function fetchLiveETFData() {
         }
     }
 
+    // SECOND PASS: Fix ETFs with 0 BTC using fallback APIs
+    for ($i = 0; $i < count($etfData); $i++) {
+        if ($etfData[$i]['btcHeld'] == 0) {
+            $ticker = $etfData[$i]['ticker'];
+            $fallbackData = tryETFFallbacks($ticker, $etfData[$i]['name']);
+
+            if ($fallbackData && $fallbackData['btcHeld'] > 0) {
+                $etfData[$i] = array_merge($etfData[$i], $fallbackData);
+            }
+        }
+    }
+
     return $etfData;
+}
+
+function tryETFFallbacks($ticker, $defaultName) {
+    // 3-TIER ETF FALLBACK SYSTEM
+    // 1. BitcoinETFData.com → 2. Finnhub → 3. Yahoo Finance
+
+    // Method 1: BitcoinETFData.com (No API key needed!)
+    try {
+        $btcEtfUrl = "https://btcetfdata.com/v1/{$ticker}.json";
+        $btcEtfData = fetchWithCurl($btcEtfUrl, [], true, "btcetf_fallback_{$ticker}", 3600);
+
+        if (!empty($btcEtfData) && is_array($btcEtfData)) {
+            $btcHeld = 0;
+            $etfName = $defaultName;
+
+            // Handle different response formats
+            if (isset($btcEtfData['data'][$ticker])) {
+                $etfInfo = $btcEtfData['data'][$ticker];
+                $btcHeld = floatval($etfInfo['holdings'] ?? 0);
+                $etfName = $etfInfo['name'] ?? $defaultName;
+            } else if (isset($btcEtfData['holdings'])) {
+                $btcHeld = floatval($btcEtfData['holdings']);
+                $etfName = $btcEtfData['name'] ?? $defaultName;
+            }
+
+            if ($btcHeld > 0) {
+                return [
+                    'btcHeld' => $btcHeld,
+                    'name' => $etfName,
+                    'dataSource' => 'BITCOINETFDATA_COM_FALLBACK',
+                    'lastUpdated' => date('Y-m-d H:i:s')
+                ];
+            }
+        }
+    } catch (Exception $e) {
+        // BitcoinETFData.com failed, try Finnhub
+    }
+
+    // Method 2: Finnhub ETF Holdings (Free tier: 60 req/min)
+    $finnhubKey = getApiKey('FINNHUB');
+    if ($finnhubKey && $finnhubKey !== 'your_finnhub_key_here') {
+        try {
+            $finnhubUrl = "https://finnhub.io/api/v1/etf/holdings?symbol={$ticker}&token={$finnhubKey}";
+            $finnhubData = fetchWithCurl($finnhubUrl, [], true, "finnhub_fallback_{$ticker}", 3600);
+
+            if (!empty($finnhubData) && is_array($finnhubData)) {
+                $btcHeld = 0;
+                if (isset($finnhubData['holdings']) && is_array($finnhubData['holdings'])) {
+                    foreach ($finnhubData['holdings'] as $holding) {
+                        $symbol = strtolower($holding['symbol'] ?? '');
+                        if (strpos($symbol, 'btc') !== false || strpos($symbol, 'bitcoin') !== false) {
+                            $btcHeld += floatval($holding['share'] ?? 0);
+                        }
+                    }
+                }
+
+                if ($btcHeld > 0) {
+                    return [
+                        'btcHeld' => $btcHeld,
+                        'name' => $finnhubData['profile']['name'] ?? $defaultName,
+                        'dataSource' => 'FINNHUB_FALLBACK',
+                        'lastUpdated' => date('Y-m-d H:i:s')
+                    ];
+                }
+            }
+        } catch (Exception $e) {
+            // Finnhub failed, try Yahoo Finance
+        }
+    }
+
+    // Method 3: Yahoo Finance (No key, but rate limited)
+    try {
+        $yahooUrl = "https://query2.finance.yahoo.com/v10/finance/quoteSummary/{$ticker}?modules=topHoldings,fundProfile";
+        $yahooData = fetchWithCurl($yahooUrl, [], true, "yahoo_fallback_{$ticker}", 3600);
+
+        if (!empty($yahooData) && is_array($yahooData)) {
+            $btcHeld = 0;
+            if (isset($yahooData['quoteSummary']['result'][0]['topHoldings']['holdings'])) {
+                foreach ($yahooData['quoteSummary']['result'][0]['topHoldings']['holdings'] as $holding) {
+                    $symbol = strtolower($holding['symbol'] ?? '');
+                    if (strpos($symbol, 'btc') !== false || strpos($symbol, 'bitcoin') !== false) {
+                        $btcHeld += floatval($holding['holdingPercent'] ?? 0) * 100;
+                    }
+                }
+            }
+
+            if ($btcHeld > 0) {
+                $profile = $yahooData['quoteSummary']['result'][0]['fundProfile'] ?? [];
+                return [
+                    'btcHeld' => $btcHeld,
+                    'name' => $profile['name'] ?? $defaultName,
+                    'dataSource' => 'YAHOO_FINANCE_FALLBACK',
+                    'lastUpdated' => date('Y-m-d H:i:s')
+                ];
+            }
+        }
+    } catch (Exception $e) {
+        // All fallbacks failed
+    }
+
+    return null; // No fallback data available
 }
 
 function estimateETFBitcoinHoldings($ticker, $profile, $holdings) {
