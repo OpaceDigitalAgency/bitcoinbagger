@@ -6,22 +6,55 @@ document.addEventListener('DOMContentLoaded', async () => {
   Utils.initTheme();
   if (window.lucide) window.lucide.createIcons();
 
-  try {
-    // 2) Fetch & render everything once
-    const data = await window.bitcoinAPI.fetchAllData();
-    updateHomepage(data);
+  let retryCount = 0;
+  const maxRetries = 3;
 
-    // 3) Hide your loader now that first paint is done
-    Utils.hideLoadingScreen();
+  async function initializeWithRetry() {
+    try {
+      // 2) Fetch & render everything once
+      const data = await window.bitcoinAPI.fetchAllData();
 
-    // 4) Then refresh every minute
-    window.bitcoinAPI.startAutoUpdate(updateHomepage, 60000);
+      // Check if we got meaningful data
+      if (!data.bitcoin || !data.companies || data.companies.length === 0) {
+        throw new Error('Incomplete data received from APIs');
+      }
 
-  } catch (err) {
-    console.error('Error initializing homepage:', err);
-    Utils.showError(err.message || 'Failed to load Bitcoin data');
-    // keep the loading screen visible so the user sees the error
+      updateHomepage(data);
+
+      // 3) Hide your loader now that first paint is done
+      Utils.hideLoadingScreen();
+
+      // 4) Then refresh every minute
+      window.bitcoinAPI.startAutoUpdate(updateHomepage, 60000);
+
+      // Show warnings if using fallback data
+      if (data.bitcoin.stale || data.bitcoin.warning) {
+        Utils.showWarning(data.bitcoin.warning || 'Using cached Bitcoin price data');
+      }
+
+    } catch (err) {
+      console.error('Error initializing homepage:', err);
+      retryCount++;
+
+      if (retryCount < maxRetries) {
+        console.log(`Retrying initialization (${retryCount}/${maxRetries})...`);
+        Utils.showRetryMessage(`Loading failed, retrying... (${retryCount}/${maxRetries})`);
+
+        // Wait before retry (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, 2000 * retryCount));
+        return initializeWithRetry();
+      } else {
+        // Final failure - show error with retry button
+        Utils.showError(
+          err.message || 'Failed to load Bitcoin data after multiple attempts',
+          true // Show retry button
+        );
+      }
+    }
   }
+
+  // Start initialization
+  await initializeWithRetry();
 });
 
 /**

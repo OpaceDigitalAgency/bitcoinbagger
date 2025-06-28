@@ -632,9 +632,8 @@ function fetchLiveTreasuryData() {
                     }
                 }
 
-                // Only fetch stock prices for top 10 companies to avoid rate limits
-                $topTickers = ['MSTR', 'MARA', 'RIOT', 'GLXY', 'TSLA', 'HUT', 'SQ', 'COIN', 'CLSK', 'HIVE'];
-                if (in_array($ticker, $topTickers)) {
+                // Fetch stock prices for all companies with Bitcoin holdings > 1000 BTC
+                if ($btcHeld > 1000) {
                     $stockPrice = fetchStockPrice($ticker);
                 }
 
@@ -860,9 +859,10 @@ try {
 
     $cachedData = getCache($cacheKey, $cacheTime);
 
-    if ($cachedData !== null) {
+    if ($cachedData !== null && !empty($cachedData)) {
         // Return cached data immediately
         $response = [
+            'success' => true,
             'data' => $cachedData,
             'meta' => [
                 'timestamp' => time(),
@@ -881,23 +881,38 @@ try {
     // If no cache, fetch live data and cache it
     $liveData = fetchLiveTreasuryData();
 
+    // Validate we got meaningful data
+    if (empty($liveData)) {
+        throw new Exception('No company data retrieved from any source');
+    }
+
+    // Filter out companies with zero Bitcoin holdings
+    $validData = array_filter($liveData, function($company) {
+        return isset($company['btcHeld']) && $company['btcHeld'] > 0;
+    });
+
+    if (empty($validData)) {
+        throw new Exception('No companies with Bitcoin holdings found');
+    }
+
     // Sort by Bitcoin holdings (descending)
-    usort($liveData, function($a, $b) {
-        return $b['btcHeld'] - $a['btcHeld'];
+    usort($validData, function($a, $b) {
+        return ($b['btcHeld'] ?? 0) - ($a['btcHeld'] ?? 0);
     });
 
     // Cache the data for future requests
-    setCache($cacheKey, $liveData);
+    setCache($cacheKey, $validData);
 
     $response = [
-        'data' => $liveData,
+        'success' => true,
+        'data' => $validData,
         'meta' => [
             'timestamp' => time(),
             'datetime' => date('Y-m-d H:i:s'),
             'source' => 'LIVE_API_ENDPOINTS',
             'cache' => false,
-            'totalCompanies' => count($liveData),
-            'apis_used' => ['FMP', 'ALPHA_VANTAGE', 'TWELVEDATA'],
+            'totalCompanies' => count($validData),
+            'apis_used' => ['COINGECKO', 'FMP', 'ALPHA_VANTAGE'],
             'data_freshness' => 'REAL_TIME_CACHED'
         ]
     ];
@@ -905,10 +920,71 @@ try {
     echo json_encode($response);
 
 } catch (Exception $e) {
-    http_response_code(500);
-    echo json_encode([
-        'error' => $e->getMessage(),
-        'timestamp' => time(),
-        'source' => 'LIVE_API_ERROR'
-    ]);
+    error_log("Treasury data API error: " . $e->getMessage());
+
+    // Try to get stale cached data as fallback
+    $staleCache = getCache($cacheKey, 86400 * 7); // Accept week-old data
+
+    if ($staleCache !== null && !empty($staleCache)) {
+        $response = [
+            'success' => true,
+            'data' => $staleCache,
+            'meta' => [
+                'timestamp' => time(),
+                'datetime' => date('Y-m-d H:i:s'),
+                'source' => 'STALE_CACHE_FALLBACK',
+                'cache' => true,
+                'totalCompanies' => count($staleCache),
+                'warning' => 'Using stale cached data - live APIs failed',
+                'error' => $e->getMessage(),
+                'data_freshness' => 'STALE_CACHE'
+            ]
+        ];
+        echo json_encode($response);
+    } else {
+        // Return minimal fallback data for known major companies
+        $fallbackData = [
+            [
+                'ticker' => 'MSTR',
+                'name' => 'MicroStrategy Inc.',
+                'btcHeld' => 190000, // Approximate known holdings
+                'businessModel' => 'Business Intelligence & Bitcoin Treasury',
+                'type' => 'stock',
+                'stockPrice' => 0,
+                'marketCap' => 0,
+                'sharesOutstanding' => 0,
+                'bitcoinPerShare' => 0,
+                'lastUpdated' => date('Y-m-d H:i:s'),
+                'dataSource' => 'EMERGENCY_FALLBACK'
+            ],
+            [
+                'ticker' => 'TSLA',
+                'name' => 'Tesla Inc.',
+                'btcHeld' => 9720,
+                'businessModel' => 'Electric Vehicles & Energy Storage',
+                'type' => 'stock',
+                'stockPrice' => 0,
+                'marketCap' => 0,
+                'sharesOutstanding' => 0,
+                'bitcoinPerShare' => 0,
+                'lastUpdated' => date('Y-m-d H:i:s'),
+                'dataSource' => 'EMERGENCY_FALLBACK'
+            ]
+        ];
+
+        http_response_code(503); // Service Temporarily Unavailable
+        echo json_encode([
+            'success' => false,
+            'error' => 'Treasury data temporarily unavailable',
+            'fallback_data' => $fallbackData,
+            'meta' => [
+                'timestamp' => time(),
+                'datetime' => date('Y-m-d H:i:s'),
+                'source' => 'EMERGENCY_FALLBACK',
+                'warning' => 'Using emergency fallback data - not real-time',
+                'totalCompanies' => count($fallbackData),
+                'status' => 'DEGRADED_SERVICE'
+            ]
+        ]);
+    }
 }
