@@ -79,9 +79,9 @@ function fetchBitcoinPrice() {
 
     foreach ($sources as $source => $config) {
         try {
-            // Check cache first (1 minute cache)
+            // Check cache first (5 minute cache to reduce API calls)
             $cacheKey = "btc_price_{$source}";
-            $cached = getCache($cacheKey, 60);
+            $cached = getCache($cacheKey, 300);
             if ($cached !== null) {
                 return $cached;
             }

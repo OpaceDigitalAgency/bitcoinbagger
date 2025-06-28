@@ -287,7 +287,7 @@ function fetchLiveETFData() {
 
     foreach ($etfs as $ticker => $info) {
         try {
-            // Get ETF profile from FMP API
+            // Get ETF profile from FMP API (cache for 24 hours to reduce rate limits)
             $apiKey = getApiKey('FMP');
             $profileUrl = "https://financialmodelingprep.com/api/v3/etf/profile/{$ticker}?apikey={$apiKey}";
             $profile = fetchWithCurl($profileUrl, [], true, "etf_profile_{$ticker}", 86400);
@@ -347,7 +347,35 @@ function fetchLiveETFData() {
                         continue;
                     }
                 } catch (Exception $avE) {
-                    // Alpha Vantage also failed
+                    // Alpha Vantage failed, try TwelveData as final fallback
+                    $tdKey = getApiKey('TWELVEDATA');
+                    if ($tdKey && $tdKey !== 'your_twelvedata_key_here') {
+                        try {
+                            $tdUrl = "https://api.twelvedata.com/profile?symbol={$ticker}&apikey={$tdKey}";
+                            $tdData = fetchWithCurl($tdUrl, [], true, "td_etf_{$ticker}", 86400);
+
+                            if (!empty($tdData) && is_array($tdData)) {
+                                // Estimate Bitcoin holdings from market cap for Bitcoin ETFs
+                                $marketCap = floatval($tdData['market_capitalization'] ?? 0);
+                                $btcPrice = getCurrentBitcoinPrice();
+                                $estimatedBTC = $marketCap > 0 && $btcPrice > 0 ? round($marketCap / $btcPrice) : 0;
+
+                                $etfData[] = [
+                                    'ticker' => $ticker,
+                                    'name' => $tdData['name'] ?? $info['name'],
+                                    'btcHeld' => $estimatedBTC,
+                                    'sharesOutstanding' => floatval($tdData['shares_outstanding'] ?? 0),
+                                    'lastUpdated' => date('Y-m-d H:i:s'),
+                                    'dataSource' => 'TWELVEDATA_ESTIMATED',
+                                    'aum' => $marketCap,
+                                    'nav' => floatval($tdData['book_value'] ?? 0)
+                                ];
+                                continue;
+                            }
+                        } catch (Exception $tdE) {
+                            // All APIs failed
+                        }
+                    }
                 }
             }
 

@@ -62,7 +62,7 @@ function getApiKey($provider) {
 // Fetch stock price with caching (1 hour cache)
 function fetchStockPrice($ticker) {
     $cacheKey = "stock_price_{$ticker}";
-    $cached = getCache($cacheKey, 3600); // 1 hour cache
+    $cached = getCache($cacheKey, 7200); // 2 hour cache to reduce API calls
 
     if ($cached !== null) {
         return $cached;
@@ -556,6 +556,7 @@ function fetchLiveTreasuryData() {
             $profileUrl = "https://financialmodelingprep.com/api/v3/profile/{$ticker}?apikey={$apiKey}";
 
             try {
+                // Try FMP first (cache for 24 hours to avoid rate limits)
                 $profile = fetchWithCurl($profileUrl, [], true, $cacheKey, 86400);
                 if (!empty($profile) && is_array($profile) && isset($profile[0])) {
                     $companyData = array_merge($companyData, $profile[0]);
@@ -578,7 +579,26 @@ function fetchLiveTreasuryData() {
                             $companyData = array_merge($companyData, $mappedProfile);
                         }
                     } catch (Exception $avE) {
-                        // Continue with discovered data only
+                        // Alpha Vantage failed, try TwelveData as final fallback
+                        $tdKey = getApiKey('TWELVEDATA');
+                        if ($tdKey && $tdKey !== 'your_twelvedata_key_here') {
+                            try {
+                                $tdUrl = "https://api.twelvedata.com/profile?symbol={$ticker}&apikey={$tdKey}";
+                                $tdProfile = fetchWithCurl($tdUrl, [], true, "td_profile_{$ticker}", 86400);
+                                if (!empty($tdProfile) && is_array($tdProfile)) {
+                                    // Map TwelveData fields to FMP format
+                                    $mappedProfile = [
+                                        'mktCap' => floatval($tdProfile['market_capitalization'] ?? 0),
+                                        'companyName' => $tdProfile['name'] ?? $ticker,
+                                        'industry' => $tdProfile['industry'] ?? 'Technology',
+                                        'sector' => $tdProfile['sector'] ?? 'Technology'
+                                    ];
+                                    $companyData = array_merge($companyData, $mappedProfile);
+                                }
+                            } catch (Exception $tdE) {
+                                // All APIs failed - continue with discovered data only
+                            }
+                        }
                     }
                 }
             }
