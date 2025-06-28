@@ -68,7 +68,7 @@
                 try {
                     const data = await window.bitcoinAPI.fetchBitcoinPrice();
                     this.btcPrice = data.usd;
-                    document.getElementById('bitcoin-price').textContent = Utils.formatCurrency(data.usd);
+                    document.getElementById('bitcoin-price-etf').textContent = Utils.formatCurrency(data.usd);
 
                     // Update nav price display
                     const navPrice = document.getElementById('nav-btc-price');
@@ -107,9 +107,9 @@
                 const avgPremium = this.etfs.length > 0 ?
                     this.etfs.reduce((sum, etf) => sum + (etf.premium || 0), 0) / this.etfs.length : 0;
 
-                document.getElementById('total-btc-held').textContent = Utils.formatNumber(totalBTC) + ' BTC';
+                document.getElementById('total-etf-holdings').textContent = Utils.formatNumber(totalBTC) + ' BTC';
                 document.getElementById('combined-aum').textContent = Utils.formatCurrency(combinedValue);
-                document.getElementById('avg-premium').textContent = avgPremium.toFixed(1) + '%';
+                document.getElementById('average-premium').textContent = avgPremium.toFixed(1) + '%';
             }
 
             renderETFsTable() {
@@ -163,7 +163,7 @@
             }
 
             setupEventListeners() {
-                document.getElementById('sort-select').addEventListener('change', (e) => {
+                document.getElementById('etf-sort-select').addEventListener('change', (e) => {
                     this.sortBy = e.target.value;
                     this.renderETFsTable();
                 });
