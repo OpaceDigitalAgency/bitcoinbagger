@@ -368,25 +368,27 @@ function fetchSharesOutstanding($ticker) {
         }
     }
 
-    // Method 6: ETF-specific fallback using known approximate values for major Bitcoin ETFs
+    // Method 6: Try additional Yahoo Finance endpoints for shares outstanding
     if ($sharesOutstanding == 0) {
-        $knownETFShares = [
-            'IBIT' => 1230000000,  // ~1.23B shares (approximate)
-            'FBTC' => 230000000,   // ~230M shares (approximate)
-            'GBTC' => 900000000,   // ~900M shares (approximate)
-            'ARKB' => 130000000,   // ~130M shares (approximate)
-            'BITB' => 72000000,    // ~72M shares (approximate)
-            'BTCO' => 47000000,    // ~47M shares (approximate)
-            'BTC' => 95000000,     // ~95M shares (approximate)
-            'HODL' => 25000000,    // ~25M shares (approximate)
-            'BRRR' => 8000000,     // ~8M shares (approximate)
-            'EZBC' => 5000000,     // ~5M shares (approximate)
-        ];
+        try {
+            // Try Yahoo Finance key statistics endpoint
+            $url = "https://query1.finance.yahoo.com/v10/finance/quoteSummary/{$ticker}?modules=defaultKeyStatistics";
+            $context = stream_context_create([
+                'http' => [
+                    'timeout' => 8,
+                    'user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                ]
+            ]);
 
-        if (isset($knownETFShares[$ticker])) {
-            $sharesOutstanding = $knownETFShares[$ticker];
-            // Log for debugging
-            error_log("BitcoinBagger: Using fallback shares outstanding for {$ticker}: {$sharesOutstanding}");
+            $response = file_get_contents($url, false, $context);
+            if ($response !== false) {
+                $data = json_decode($response, true);
+                if (isset($data['quoteSummary']['result'][0]['defaultKeyStatistics']['sharesOutstanding']['raw'])) {
+                    $sharesOutstanding = floatval($data['quoteSummary']['result'][0]['defaultKeyStatistics']['sharesOutstanding']['raw']);
+                }
+            }
+        } catch (Exception $e) {
+            // Continue - no fallback data, just return 0 if APIs fail
         }
     }
 

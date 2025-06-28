@@ -205,24 +205,27 @@ function fetchComprehensiveMarketCap($ticker) {
         }
     }
 
-    // Method 5: Company-specific fallback using known approximate values for major Bitcoin companies
+    // Method 5: Try additional market cap sources
     if ($marketCap == 0) {
-        $knownCompanyMarketCaps = [
-            'MSTR' => 75000000000,   // ~$75B (approximate)
-            'TSLA' => 800000000000,  // ~$800B (approximate)
-            'COIN' => 50000000000,   // ~$50B (approximate)
-            'MARA' => 3500000000,    // ~$3.5B (approximate)
-            'RIOT' => 2500000000,    // ~$2.5B (approximate)
-            'CLSK' => 1500000000,    // ~$1.5B (approximate)
-            'HUT' => 1200000000,     // ~$1.2B (approximate)
-            'BITF' => 800000000,     // ~$800M (approximate)
-            'WULF' => 600000000,     // ~$600M (approximate)
-            'CIFR' => 500000000,     // ~$500M (approximate)
-        ];
+        try {
+            // Try Yahoo Finance comprehensive quote endpoint
+            $url = "https://query1.finance.yahoo.com/v7/finance/quote?symbols={$ticker}&fields=marketCap,sharesOutstanding,regularMarketPrice";
+            $context = stream_context_create([
+                'http' => [
+                    'timeout' => 8,
+                    'user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                ]
+            ]);
 
-        if (isset($knownCompanyMarketCaps[$ticker])) {
-            $marketCap = $knownCompanyMarketCaps[$ticker];
-            error_log("BitcoinBagger: Using fallback market cap for {$ticker}: " . number_format($marketCap));
+            $response = file_get_contents($url, false, $context);
+            if ($response !== false) {
+                $data = json_decode($response, true);
+                if (isset($data['quoteResponse']['result'][0]['marketCap'])) {
+                    $marketCap = floatval($data['quoteResponse']['result'][0]['marketCap']);
+                }
+            }
+        } catch (Exception $e) {
+            // Continue - no fallback data, just return 0 if APIs fail
         }
     }
 
