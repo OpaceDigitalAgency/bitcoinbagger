@@ -9,7 +9,7 @@ class BitcoinAPI {
 
   async fetchBitcoinPrice() {
     // SECURITY: Use backend API instead of direct external calls
-    const res = await fetch('/api/btc-price.php');
+    const res = await fetch('/api/btc-price.php?t=' + Date.now());
     if (!res.ok) throw new Error('Bitcoin price API failed');
     const response = await res.json();
     
@@ -30,8 +30,8 @@ class BitcoinAPI {
     const timeoutId = setTimeout(() => controller.abort(), 45000); // 45 seconds for initial cache build
     
     try {
-      const res = await fetch('/api/treasuries.php', { 
-        signal: controller.signal 
+      const res = await fetch('/api/treasuries.php?t=' + Date.now(), {
+        signal: controller.signal
       });
       clearTimeout(timeoutId);
       
@@ -107,8 +107,8 @@ class BitcoinAPI {
     
     try {
       // Load real-time ETF holdings from backend
-      const res = await fetch('/api/etf-holdings.php', { 
-        signal: controller.signal 
+      const res = await fetch('/api/etf-holdings.php?t=' + Date.now(), {
+        signal: controller.signal
       });
       clearTimeout(timeoutId);
       

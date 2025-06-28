@@ -71,9 +71,17 @@
 
             async loadBitcoinPrice() {
                 try {
+                    console.log('Loading Bitcoin price...');
                     const data = await window.bitcoinAPI.fetchBitcoinPrice();
+                    console.log('Bitcoin price data:', data);
                     this.btcPrice = data.usd;
-                    document.getElementById('bitcoin-price').textContent = Utils.formatCurrency(data.usd);
+
+                    const priceElement = document.getElementById('bitcoin-price');
+                    if (priceElement) {
+                        priceElement.textContent = Utils.formatCurrency(data.usd);
+                    } else {
+                        console.error('bitcoin-price element not found');
+                    }
 
                     // Update nav price display
                     const navPrice = document.getElementById('nav-btc-price');
@@ -85,9 +93,11 @@
 
             async loadCompanies() {
                 try {
-                    // Use the dynamic treasury API
-                    const response = await fetch('/api/treasuries.php');
+                    console.log('Loading companies...');
+                    // Use the dynamic treasury API with cache busting
+                    const response = await fetch('/api/treasuries.php?t=' + Date.now());
                     const data = await response.json();
+                    console.log('Companies data:', data);
 
                     if (data.data) {
                         // Filter for companies only (not ETFs)

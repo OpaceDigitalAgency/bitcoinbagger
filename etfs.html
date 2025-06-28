@@ -80,9 +80,11 @@
 
             async loadETFs() {
                 try {
-                    // Use the 100% dynamic ETF API
-                    const response = await fetch('/api/etf-holdings.php');
+                    console.log('Loading ETFs...');
+                    // Use the 100% dynamic ETF API with cache busting
+                    const response = await fetch('/api/etf-holdings.php?t=' + Date.now());
                     const data = await response.json();
+                    console.log('ETF data:', data);
 
                     if (data.data) {
                         // Show all ETFs, even if btcHeld is 0 (API limitations)
