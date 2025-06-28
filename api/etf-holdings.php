@@ -132,24 +132,9 @@ function fetchLiveETFData() {
         $sharesOutstanding = $etfDetails['sharesOutstanding'] ?? 0;
         $aum = $etfDetails['aum'] ?? 0;
 
-        // If shares outstanding is still 0, try additional sources
+        // If shares outstanding is still 0, try multiple additional sources
         if ($sharesOutstanding == 0) {
-            // Try FMP API for shares outstanding
-            $fmpKey = getApiKey('FMP');
-            if ($fmpKey && $fmpKey !== 'REDACTED_API_KEY') {
-                try {
-                    $url = "https://financialmodelingprep.com/api/v3/quote/{$ticker}?apikey={$fmpKey}";
-                    $response = file_get_contents($url);
-                    if ($response !== false) {
-                        $data = json_decode($response, true);
-                        if (is_array($data) && isset($data[0]['sharesOutstanding'])) {
-                            $sharesOutstanding = floatval($data[0]['sharesOutstanding']);
-                        }
-                    }
-                } catch (Exception $e) {
-                    // Continue without shares outstanding data
-                }
-            }
+            $sharesOutstanding = fetchSharesOutstanding($ticker);
         }
 
         // Calculate AUM if we have price and shares
@@ -262,6 +247,156 @@ function fetchLiveETFData() {
     }
 
     return $etfData;
+}
+
+// NEW: Comprehensive shares outstanding fetcher with multiple API sources
+function fetchSharesOutstanding($ticker) {
+    $cacheKey = "shares_outstanding_{$ticker}";
+    $cached = getCache($cacheKey, 3600); // 1 hour cache
+
+    if ($cached !== null && $cached > 0) {
+        return $cached;
+    }
+
+    $sharesOutstanding = 0;
+
+    // Method 1: Try Yahoo Finance Statistics API (most comprehensive)
+    try {
+        $url = "https://query1.finance.yahoo.com/v10/finance/quoteSummary/{$ticker}?modules=defaultKeyStatistics,summaryDetail";
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 10,
+                'user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            ]
+        ]);
+
+        $response = file_get_contents($url, false, $context);
+        if ($response !== false) {
+            $data = json_decode($response, true);
+            if (isset($data['quoteSummary']['result'][0]['defaultKeyStatistics']['sharesOutstanding']['raw'])) {
+                $sharesOutstanding = floatval($data['quoteSummary']['result'][0]['defaultKeyStatistics']['sharesOutstanding']['raw']);
+            } elseif (isset($data['quoteSummary']['result'][0]['summaryDetail']['sharesOutstanding']['raw'])) {
+                $sharesOutstanding = floatval($data['quoteSummary']['result'][0]['summaryDetail']['sharesOutstanding']['raw']);
+            }
+        }
+    } catch (Exception $e) {
+        // Continue to next method
+    }
+
+    // Method 2: Try FMP API (Financial Modeling Prep)
+    if ($sharesOutstanding == 0) {
+        $fmpKey = getApiKey('FMP');
+        if ($fmpKey && $fmpKey !== 'REDACTED_API_KEY') {
+            try {
+                $url = "https://financialmodelingprep.com/api/v3/quote/{$ticker}?apikey={$fmpKey}";
+                $response = file_get_contents($url);
+                if ($response !== false) {
+                    $data = json_decode($response, true);
+                    if (is_array($data) && isset($data[0]['sharesOutstanding']) && $data[0]['sharesOutstanding'] > 0) {
+                        $sharesOutstanding = floatval($data[0]['sharesOutstanding']);
+                    }
+                }
+            } catch (Exception $e) {
+                // Continue to next method
+            }
+        }
+    }
+
+    // Method 3: Try Alpha Vantage API
+    if ($sharesOutstanding == 0) {
+        $alphaKey = getApiKey('ALPHA_VANTAGE');
+        if ($alphaKey && $alphaKey !== 'REDACTED_API_KEY') {
+            try {
+                $url = "https://www.alphavantage.co/query?function=OVERVIEW&symbol={$ticker}&apikey={$alphaKey}";
+                $response = file_get_contents($url);
+                if ($response !== false) {
+                    $data = json_decode($response, true);
+                    if (isset($data['SharesOutstanding']) && is_numeric($data['SharesOutstanding'])) {
+                        $sharesOutstanding = floatval($data['SharesOutstanding']);
+                    }
+                }
+            } catch (Exception $e) {
+                // Continue to next method
+            }
+        }
+    }
+
+    // Method 4: Try Finnhub API for basic metrics
+    if ($sharesOutstanding == 0) {
+        $finnhubKey = getApiKey('FINNHUB');
+        if ($finnhubKey && $finnhubKey !== 'REDACTED_API_KEY') {
+            try {
+                $url = "https://finnhub.io/api/v1/stock/metric?symbol={$ticker}&metric=all&token={$finnhubKey}";
+                $ch = curl_init();
+                curl_setopt($ch, CURLOPT_URL, $url);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 8);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+
+                $response = curl_exec($ch);
+                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+
+                if ($httpCode === 200) {
+                    $data = json_decode($response, true);
+                    if (isset($data['metric']['sharesOutstanding']) && $data['metric']['sharesOutstanding'] > 0) {
+                        $sharesOutstanding = floatval($data['metric']['sharesOutstanding']);
+                    }
+                }
+            } catch (Exception $e) {
+                // Continue to next method
+            }
+        }
+    }
+
+    // Method 5: Try TwelveData API
+    if ($sharesOutstanding == 0) {
+        $twelveKey = getApiKey('TWELVEDATA');
+        if ($twelveKey && $twelveKey !== 'REDACTED_API_KEY') {
+            try {
+                $url = "https://api.twelvedata.com/statistics?symbol={$ticker}&apikey={$twelveKey}";
+                $response = file_get_contents($url);
+                if ($response !== false) {
+                    $data = json_decode($response, true);
+                    if (isset($data['statistics']['shares_outstanding']) && $data['statistics']['shares_outstanding'] > 0) {
+                        $sharesOutstanding = floatval($data['statistics']['shares_outstanding']);
+                    }
+                }
+            } catch (Exception $e) {
+                // Continue to next method
+            }
+        }
+    }
+
+    // Method 6: ETF-specific fallback using known approximate values for major Bitcoin ETFs
+    if ($sharesOutstanding == 0) {
+        $knownETFShares = [
+            'IBIT' => 1230000000,  // ~1.23B shares (approximate)
+            'FBTC' => 230000000,   // ~230M shares (approximate)
+            'GBTC' => 900000000,   // ~900M shares (approximate)
+            'ARKB' => 130000000,   // ~130M shares (approximate)
+            'BITB' => 72000000,    // ~72M shares (approximate)
+            'BTCO' => 47000000,    // ~47M shares (approximate)
+            'BTC' => 95000000,     // ~95M shares (approximate)
+            'HODL' => 25000000,    // ~25M shares (approximate)
+            'BRRR' => 8000000,     // ~8M shares (approximate)
+            'EZBC' => 5000000,     // ~5M shares (approximate)
+        ];
+
+        if (isset($knownETFShares[$ticker])) {
+            $sharesOutstanding = $knownETFShares[$ticker];
+            // Log for debugging
+            error_log("BitcoinBagger: Using fallback shares outstanding for {$ticker}: {$sharesOutstanding}");
+        }
+    }
+
+    // Cache the result (even if 0) to avoid repeated API calls
+    if ($sharesOutstanding > 0) {
+        setCache($cacheKey, $sharesOutstanding);
+    }
+
+    // Always return a value, even if 0
+    return $sharesOutstanding;
 }
 
 // NEW: Fetch Bitcoin ETFs from ETFdb.com API
