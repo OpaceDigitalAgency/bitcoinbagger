@@ -127,37 +127,67 @@ function fetchStockData($ticker) {
     $marketCap = 0;
     $sharesOutstanding = 0;
 
-    // Try Yahoo Finance first (free, no API key required)
-    try {
-        $url = "https://query1.finance.yahoo.com/v7/finance/quote?symbols={$ticker}&fields=regularMarketPrice,marketCap,sharesOutstanding,trailingPE,forwardPE";
-        $context = stream_context_create([
-            'http' => [
-                'timeout' => 8,
-                'user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            ]
-        ]);
+    // Try multiple free APIs with better rate limiting handling
 
-        $response = file_get_contents($url, false, $context);
-        if ($response !== false) {
-            $data = json_decode($response, true);
-            if (isset($data['quoteResponse']['result'][0])) {
-                $quote = $data['quoteResponse']['result'][0];
-                $price = floatval($quote['regularMarketPrice'] ?? 0);
-                $marketCap = floatval($quote['marketCap'] ?? 0);
-                $sharesOutstanding = floatval($quote['sharesOutstanding'] ?? 0);
-
-                // If marketCap is 0 but we have price and shares, calculate it
-                if ($marketCap == 0 && $price > 0 && $sharesOutstanding > 0) {
-                    $marketCap = $price * $sharesOutstanding;
-                }
-                // If sharesOutstanding is 0 but we have price and marketCap, calculate it
-                if ($sharesOutstanding == 0 && $price > 0 && $marketCap > 0) {
-                    $sharesOutstanding = $marketCap / $price;
+    // Try Alpha Vantage first (if available)
+    $avKey = getApiKey('ALPHA_VANTAGE');
+    if ($avKey && $avKey !== 'your_alpha_vantage_key_here' && $price == 0) {
+        try {
+            $url = "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={$ticker}&apikey={$avKey}";
+            $response = file_get_contents($url);
+            if ($response !== false) {
+                $data = json_decode($response, true);
+                if (isset($data['Global Quote']['05. price'])) {
+                    $price = floatval($data['Global Quote']['05. price']);
                 }
             }
+            // Add small delay to avoid rate limiting
+            usleep(200000); // 200ms delay
+        } catch (Exception $e) {
+            // Continue to next API
         }
-    } catch (Exception $e) {
-        // Continue to next API
+    }
+
+    // Try Yahoo Finance with better headers and error handling
+    if ($price == 0) {
+        try {
+            $url = "https://query1.finance.yahoo.com/v7/finance/quote?symbols={$ticker}&fields=regularMarketPrice,marketCap,sharesOutstanding";
+            $context = stream_context_create([
+                'http' => [
+                    'timeout' => 10,
+                    'user_agent' => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'header' => [
+                        'Accept: application/json',
+                        'Accept-Language: en-US,en;q=0.9',
+                        'Cache-Control: no-cache'
+                    ]
+                ]
+            ]);
+
+            $response = file_get_contents($url, false, $context);
+            if ($response !== false) {
+                $data = json_decode($response, true);
+                if (isset($data['quoteResponse']['result'][0])) {
+                    $quote = $data['quoteResponse']['result'][0];
+                    $price = floatval($quote['regularMarketPrice'] ?? 0);
+                    $marketCap = floatval($quote['marketCap'] ?? 0);
+                    $sharesOutstanding = floatval($quote['sharesOutstanding'] ?? 0);
+
+                    // If marketCap is 0 but we have price and shares, calculate it
+                    if ($marketCap == 0 && $price > 0 && $sharesOutstanding > 0) {
+                        $marketCap = $price * $sharesOutstanding;
+                    }
+                    // If sharesOutstanding is 0 but we have price and marketCap, calculate it
+                    if ($sharesOutstanding == 0 && $price > 0 && $marketCap > 0) {
+                        $sharesOutstanding = $marketCap / $price;
+                    }
+                }
+            }
+            // Add delay to avoid rate limiting
+            usleep(300000); // 300ms delay
+        } catch (Exception $e) {
+            // Continue to next API
+        }
     }
 
     // Try FMP as fallback (if not rate limited)
@@ -697,26 +727,8 @@ function fetchLiveTreasuryData() {
                 $marketCap = $companyData['mktCap'] ?? 0;
                 $sharesOutstanding = 0;
 
-                // Known market cap data for major Bitcoin companies (in billions)
-                $knownMarketCaps = [
-                    'MSTR' => 75.0,    // ~$75B
-                    'TSLA' => 1000.0,  // ~$1T
-                    'COIN' => 90.0,    // ~$90B
-                    'MARA' => 3.5,     // ~$3.5B
-                    'RIOT' => 2.8,     // ~$2.8B
-                    'CLSK' => 1.2,     // ~$1.2B
-                    'HUT' => 3.0,      // ~$3B
-                    'GLXY' => 5.0,     // ~$5B
-                    'HIVE' => 0.8,     // ~$800M
-                    'CIFR' => 1.0,     // ~$1B
-                    'SMLR' => 2.5,     // ~$2.5B
-                    'SQ' => 45.0       // ~$45B (Block Inc)
-                ];
-
-                // Use known market cap if available and current data is 0
-                if ($marketCap == 0 && isset($knownMarketCaps[$ticker])) {
-                    $marketCap = $knownMarketCaps[$ticker] * 1000000000; // Convert to actual value
-                }
+                // Don't use hardcoded market cap data - get real data from APIs only
+                // If APIs fail, the data should show as N/A, not fake values
 
                 // If market cap is still 0, try to get it from Alpha Vantage as fallback
                 if ($marketCap == 0) {

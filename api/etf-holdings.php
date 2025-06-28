@@ -46,8 +46,10 @@ function fetchLiveETFData() {
         '21XB' => '21Shares Bitcoin ETP'
     ];
 
-    // Step 1: Try to get Bitcoin holdings data from btcetfdata.com
+    // Step 1: Try multiple sources for Bitcoin holdings data
     $holdingsData = [];
+
+    // Try btcetfdata.com first
     try {
         $context = stream_context_create([
             'http' => [
@@ -73,6 +75,32 @@ function fetchLiveETFData() {
         }
     } catch (Exception $e) {
         error_log("Bitcoin ETF holdings data failed: " . $e->getMessage());
+    }
+
+    // Try alternative source: bitcointreasuries.net API (if available)
+    if (count($holdingsData) < 5) { // If we don't have enough data
+        try {
+            $response = file_get_contents('https://api.bitcointreasuries.net/v1/entities');
+            if ($response !== false) {
+                $data = json_decode($response, true);
+                if (is_array($data)) {
+                    foreach ($data as $entity) {
+                        if (isset($entity['symbol']) && isset($entity['btc']) &&
+                            array_key_exists(strtoupper($entity['symbol']), $bitcoinETFs)) {
+                            $ticker = strtoupper($entity['symbol']);
+                            if (!isset($holdingsData[$ticker])) {
+                                $holdingsData[$ticker] = [
+                                    'name' => $entity['name'] ?? $bitcoinETFs[$ticker],
+                                    'btcHeld' => floatval($entity['btc'])
+                                ];
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            error_log("Alternative Bitcoin holdings source failed: " . $e->getMessage());
+        }
     }
 
     // Step 2: Try ETFdb.com API for comprehensive ETF data
@@ -104,22 +132,8 @@ function fetchLiveETFData() {
         $sharesOutstanding = $etfDetails['sharesOutstanding'] ?? 0;
         $aum = $etfDetails['aum'] ?? 0;
 
-        // Use known shares outstanding for major ETFs (more reliable than calculations)
-        $knownShares = [
-            'IBIT' => 700000000,    // ~700M shares
-            'FBTC' => 200000000,    // ~200M shares
-            'GBTC' => 900000000,    // ~900M shares
-            'ARKB' => 125000000,    // ~125M shares
-            'BITB' => 70000000,     // ~70M shares
-            'BTCO' => 25000000,     // ~25M shares
-            'HODL' => 30000000,     // ~30M shares
-            'BRRR' => 10000000      // ~10M shares
-        ];
-
-        // Always use known shares for major ETFs (more reliable than API data)
-        if (isset($knownShares[$ticker])) {
-            $sharesOutstanding = $knownShares[$ticker];
-        }
+        // Try to get real shares outstanding from multiple sources
+        // Don't use hardcoded fallback data - if APIs fail, show N/A
 
         // Calculate AUM if we have price and shares
         if ($aum == 0 && $price > 0 && $sharesOutstanding > 0) {
