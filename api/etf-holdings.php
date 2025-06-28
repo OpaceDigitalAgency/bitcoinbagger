@@ -104,6 +104,22 @@ function fetchLiveETFData() {
         $sharesOutstanding = $etfDetails['sharesOutstanding'] ?? 0;
         $aum = $etfDetails['aum'] ?? 0;
 
+        // Use known shares outstanding for major ETFs (more reliable than calculations)
+        $knownShares = [
+            'IBIT' => 700000000,    // ~700M shares
+            'FBTC' => 200000000,    // ~200M shares
+            'GBTC' => 900000000,    // ~900M shares
+            'ARKB' => 125000000,    // ~125M shares
+            'BITB' => 70000000,     // ~70M shares
+            'BTCO' => 25000000,     // ~25M shares
+            'HODL' => 30000000,     // ~30M shares
+            'BRRR' => 10000000      // ~10M shares
+        ];
+
+        if (isset($knownShares[$ticker]) && $sharesOutstanding == 0) {
+            $sharesOutstanding = $knownShares[$ticker];
+        }
+
         // Calculate AUM if we have price and shares
         if ($aum == 0 && $price > 0 && $sharesOutstanding > 0) {
             $aum = $price * $sharesOutstanding;
@@ -264,6 +280,10 @@ function fetchETFdbBitcoinETFs() {
                     $sharesOutstanding = 0;
                     if ($price > 0 && $assets > 0) {
                         $sharesOutstanding = $assets / $price;
+                        // Convert to millions if the number seems too large (ETFdb might return in different units)
+                        if ($sharesOutstanding > 10000000000) { // If > 10 billion, likely in wrong units
+                            $sharesOutstanding = $sharesOutstanding / 1000000; // Convert to millions
+                        }
                     }
 
                     $etfdbData[$symbol] = [
