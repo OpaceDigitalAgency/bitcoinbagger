@@ -350,7 +350,7 @@ function fetchETFdbBitcoinETFs() {
     return $etfdbData;
 }
 
-// Helper function to parse asset values like "$23,740.88" or "$23.74B"
+// Helper function to parse asset values like "$23,740.88" or "$23.74B" or "$673,680" (billions)
 function parseAssetValue($assetStr) {
     $assetStr = str_replace(['$', ','], '', $assetStr);
     $multiplier = 1;
@@ -364,6 +364,13 @@ function parseAssetValue($assetStr) {
     } elseif (stripos($assetStr, 'K') !== false) {
         $multiplier = 1000; // Thousand
         $assetStr = str_replace(['K', 'k'], '', $assetStr);
+    } else {
+        // ETFdb.com returns large ETF assets without suffix (e.g., "673,680" for $673.68B)
+        // If the number is > 100,000 and no suffix, assume it's in millions
+        $value = floatval($assetStr);
+        if ($value > 100000) {
+            $multiplier = 1000000; // Treat as millions (so 673,680 becomes $673.68B)
+        }
     }
 
     return floatval($assetStr) * $multiplier;
