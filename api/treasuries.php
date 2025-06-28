@@ -60,40 +60,70 @@ function getApiKey($provider) {
     return $key;
 }
 
-// Fetch stock price with caching (1 hour cache)
+// Fetch stock price with caching and multiple free APIs
 function fetchStockPrice($ticker) {
     $cacheKey = "stock_price_{$ticker}";
-    $cached = getCache($cacheKey, 7200); // 2 hour cache to reduce API calls
+    $cached = getCache($cacheKey, 1800); // 30 minute cache to reduce API calls
+
+    if ($cached !== null) {
+        return $cached;
+    }
+
+    $stockData = fetchStockData($ticker);
+
+    // Cache the result (even if 0) to avoid repeated API calls
+    setCache($cacheKey, $stockData['price']);
+    return $stockData['price'];
+}
+
+// Enhanced function to fetch comprehensive stock data
+function fetchStockData($ticker) {
+    $cacheKey = "stock_data_{$ticker}";
+    $cached = getCache($cacheKey, 1800); // 30 minute cache
 
     if ($cached !== null) {
         return $cached;
     }
 
     $price = 0;
+    $marketCap = 0;
+    $sharesOutstanding = 0;
 
-    // Try FMP first (most reliable for stock prices)
-    $fmpKey = getApiKey('FMP');
-    if ($fmpKey && $fmpKey !== 'REDACTED_API_KEY') {
-        try {
-            $url = "https://financialmodelingprep.com/api/v3/quote/{$ticker}?apikey={$fmpKey}";
-            $data = fetchWithCurl($url);
-            if (is_array($data) && isset($data[0]['price'])) {
-                $price = floatval($data[0]['price']);
+    // Try Yahoo Finance first (free, no API key required)
+    try {
+        $url = "https://query1.finance.yahoo.com/v7/finance/quote?symbols={$ticker}";
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 8,
+                'user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            ]
+        ]);
+
+        $response = file_get_contents($url, false, $context);
+        if ($response !== false) {
+            $data = json_decode($response, true);
+            if (isset($data['quoteResponse']['result'][0])) {
+                $quote = $data['quoteResponse']['result'][0];
+                $price = floatval($quote['regularMarketPrice'] ?? 0);
+                $marketCap = floatval($quote['marketCap'] ?? 0);
+                $sharesOutstanding = floatval($quote['sharesOutstanding'] ?? 0);
             }
-        } catch (Exception $e) {
-            // Continue to next API
         }
+    } catch (Exception $e) {
+        // Continue to next API
     }
 
-    // Try Alpha Vantage as fallback
+    // Try FMP as fallback (if not rate limited)
     if ($price == 0) {
-        $avKey = getApiKey('ALPHA_VANTAGE');
-        if ($avKey && $avKey !== 'your_alpha_vantage_key_here') {
+        $fmpKey = getApiKey('FMP');
+        if ($fmpKey && $fmpKey !== 'REDACTED_API_KEY') {
             try {
-                $url = "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={$ticker}&apikey={$avKey}";
+                $url = "https://financialmodelingprep.com/api/v3/quote/{$ticker}?apikey={$fmpKey}";
                 $data = fetchWithCurl($url);
-                if (isset($data['Global Quote']['05. price'])) {
-                    $price = floatval($data['Global Quote']['05. price']);
+                if (is_array($data) && isset($data[0]['price']) && !isset($data['Error Message'])) {
+                    $price = floatval($data[0]['price']);
+                    $marketCap = floatval($data[0]['marketCap'] ?? 0);
+                    $sharesOutstanding = floatval($data[0]['sharesOutstanding'] ?? 0);
                 }
             } catch (Exception $e) {
                 // Continue to next API
@@ -101,25 +131,31 @@ function fetchStockPrice($ticker) {
         }
     }
 
-    // Try TwelveData as final fallback
+    // Try Finnhub as another free option
     if ($price == 0) {
-        $tdKey = getApiKey('TWELVEDATA');
-        if ($tdKey && $tdKey !== 'your_twelvedata_key_here') {
+        $finnhubKey = getApiKey('FINNHUB');
+        if ($finnhubKey && $finnhubKey !== 'your_finnhub_key_here') {
             try {
-                $url = "https://api.twelvedata.com/price?symbol={$ticker}&apikey={$tdKey}";
+                $url = "https://finnhub.io/api/v1/quote?symbol={$ticker}&token={$finnhubKey}";
                 $data = fetchWithCurl($url);
-                if (isset($data['price'])) {
-                    $price = floatval($data['price']);
+                if (isset($data['c']) && $data['c'] > 0) {
+                    $price = floatval($data['c']); // Current price
                 }
             } catch (Exception $e) {
-                // All APIs failed
+                // Continue
             }
         }
     }
 
-    // Cache the result (even if 0) to avoid repeated API calls
-    setCache($cacheKey, $price);
-    return $price;
+    $result = [
+        'price' => $price,
+        'marketCap' => $marketCap,
+        'sharesOutstanding' => $sharesOutstanding
+    ];
+
+    // Cache the result
+    setCache($cacheKey, $result);
+    return $result;
 }
 
 function fetchWithCurl($url, $headers = [], $useCache = true, $cacheKey = null, $cacheTime = 86400) {
@@ -612,6 +648,7 @@ function fetchLiveTreasuryData() {
                 // Get basic stock price for major companies (limited to prevent rate limits)
                 $stockPrice = 0;
                 $marketCap = $companyData['mktCap'] ?? 0;
+                $sharesOutstanding = 0;
 
                 // If market cap is 0, try to get it from Alpha Vantage as fallback
                 if ($marketCap == 0) {
@@ -632,14 +669,22 @@ function fetchLiveTreasuryData() {
                     }
                 }
 
-                // Fetch stock prices for all companies with Bitcoin holdings > 1000 BTC
+                // Fetch comprehensive stock data for all companies with Bitcoin holdings > 1000 BTC
                 if ($btcHeld > 1000) {
-                    $stockPrice = fetchStockPrice($ticker);
+                    $stockData = fetchStockData($ticker);
+                    $stockPrice = $stockData['price'];
+
+                    // Use fetched data if available, otherwise keep existing values
+                    if ($stockData['marketCap'] > 0) {
+                        $marketCap = $stockData['marketCap'];
+                    }
+                    if ($stockData['sharesOutstanding'] > 0) {
+                        $sharesOutstanding = $stockData['sharesOutstanding'];
+                    }
                 }
 
-                // Calculate shares outstanding if we have both market cap and stock price
-                $sharesOutstanding = 0;
-                if ($stockPrice > 0 && $marketCap > 0) {
+                // Calculate shares outstanding if we have both market cap and stock price but no shares data
+                if ($sharesOutstanding == 0 && $stockPrice > 0 && $marketCap > 0) {
                     $sharesOutstanding = $marketCap / $stockPrice;
                 }
 

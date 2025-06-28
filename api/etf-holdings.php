@@ -61,7 +61,7 @@ function fetchLiveETFData() {
                             'ticker' => strtoupper($ticker),
                             'name' => $etfInfo['name'] ?? $ticker . ' Bitcoin ETF',
                             'btcHeld' => floatval($etfInfo['holdings']),
-                            'sharesOutstanding' => floatval($etfInfo['shares_outstanding'] ?? 0),
+                            'sharesOutstanding' => $priceData['sharesOutstanding'] ?: floatval($etfInfo['shares_outstanding'] ?? 0),
                             'nav' => $priceData['nav'] ?: floatval($etfInfo['nav'] ?? 0),
                             'price' => $priceData['price'] ?: floatval($etfInfo['price'] ?? 0),
                             'aum' => floatval($etfInfo['aum'] ?? 0),
@@ -130,7 +130,7 @@ function fetchLiveETFData() {
             'ticker' => $ticker,
             'name' => $info['name'],
             'btcHeld' => $info['btcHeld'],
-            'sharesOutstanding' => 0,
+            'sharesOutstanding' => $priceData['sharesOutstanding'] ?? 0,
             'nav' => $priceData['nav'],
             'price' => $priceData['price'],
             'aum' => $info['aum'],
@@ -159,7 +159,8 @@ if (file_exists(__DIR__ . '/.env')) {
 $API_KEYS = [
     'FMP' => $_ENV['FMP_API_KEY'] ?? '',
     'ALPHA_VANTAGE' => $_ENV['ALPHA_VANTAGE_API_KEY'] ?? '',
-    'TWELVEDATA' => $_ENV['TWELVEDATA_API_KEY'] ?? ''
+    'TWELVEDATA' => $_ENV['TWELVEDATA_API_KEY'] ?? '',
+    'FINNHUB' => $_ENV['FINNHUB_API_KEY'] ?? ''
 ];
 
 // Cache management for ETF data
@@ -191,10 +192,10 @@ function getApiKey($provider) {
     return $API_KEYS[$provider] ?? '';
 }
 
-// Fetch ETF price with multiple fallbacks
+// Fetch ETF price with multiple fallbacks including free APIs
 function fetchETFPrice($ticker) {
     $cacheKey = "etf_price_{$ticker}";
-    $cached = getCache($cacheKey, 1800); // 30 minute cache for ETF prices
+    $cached = getCache($cacheKey, 900); // 15 minute cache for ETF prices
 
     if ($cached !== null) {
         return $cached;
@@ -202,26 +203,49 @@ function fetchETFPrice($ticker) {
 
     $price = 0;
     $nav = 0;
+    $sharesOutstanding = 0;
 
-    // Try FMP first (most reliable for ETF prices)
-    $fmpKey = getApiKey('FMP');
-    if ($fmpKey) {
+    // Try Yahoo Finance first (free, no API key required)
+    try {
+        $url = "https://query1.finance.yahoo.com/v8/finance/chart/{$ticker}";
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 8,
+                'user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            ]
+        ]);
+
+        $response = file_get_contents($url, false, $context);
+        if ($response !== false) {
+            $data = json_decode($response, true);
+            if (isset($data['chart']['result'][0]['meta']['regularMarketPrice'])) {
+                $price = floatval($data['chart']['result'][0]['meta']['regularMarketPrice']);
+            }
+        }
+    } catch (Exception $e) {
+        // Continue to next API
+    }
+
+    // Try Yahoo Finance quote API as backup
+    if ($price == 0) {
         try {
-            $url = "https://financialmodelingprep.com/api/v3/quote/{$ticker}?apikey={$fmpKey}";
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $url);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            $url = "https://query1.finance.yahoo.com/v7/finance/quote?symbols={$ticker}";
+            $context = stream_context_create([
+                'http' => [
+                    'timeout' => 8,
+                    'user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                ]
+            ]);
 
-            $response = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-
-            if ($httpCode === 200) {
+            $response = file_get_contents($url, false, $context);
+            if ($response !== false) {
                 $data = json_decode($response, true);
-                if (is_array($data) && isset($data[0]['price'])) {
-                    $price = floatval($data[0]['price']);
+                if (isset($data['quoteResponse']['result'][0])) {
+                    $quote = $data['quoteResponse']['result'][0];
+                    $price = floatval($quote['regularMarketPrice'] ?? 0);
+                    $sharesOutstanding = floatval($quote['sharesOutstanding'] ?? 0);
+                    // For ETFs, NAV is often close to market price
+                    $nav = $price;
                 }
             }
         } catch (Exception $e) {
@@ -229,17 +253,18 @@ function fetchETFPrice($ticker) {
         }
     }
 
-    // Try Alpha Vantage as fallback
+    // Try FMP as fallback (if not rate limited)
     if ($price == 0) {
-        $avKey = getApiKey('ALPHA_VANTAGE');
-        if ($avKey) {
+        $fmpKey = getApiKey('FMP');
+        if ($fmpKey) {
             try {
-                $url = "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={$ticker}&apikey={$avKey}";
+                $url = "https://financialmodelingprep.com/api/v3/quote/{$ticker}?apikey={$fmpKey}";
                 $ch = curl_init();
                 curl_setopt($ch, CURLOPT_URL, $url);
                 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 8);
                 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+                curl_setopt($ch, CURLOPT_USERAGENT, 'BitcoinBagger/1.0');
 
                 $response = curl_exec($ch);
                 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -247,8 +272,9 @@ function fetchETFPrice($ticker) {
 
                 if ($httpCode === 200) {
                     $data = json_decode($response, true);
-                    if (isset($data['Global Quote']['05. price'])) {
-                        $price = floatval($data['Global Quote']['05. price']);
+                    if (is_array($data) && isset($data[0]['price']) && !isset($data['Error Message'])) {
+                        $price = floatval($data[0]['price']);
+                        $sharesOutstanding = floatval($data[0]['sharesOutstanding'] ?? 0);
                     }
                 }
             } catch (Exception $e) {
@@ -257,16 +283,16 @@ function fetchETFPrice($ticker) {
         }
     }
 
-    // Try TwelveData as final fallback
+    // Try Finnhub as another free option
     if ($price == 0) {
-        $tdKey = getApiKey('TWELVEDATA');
-        if ($tdKey) {
-            try {
-                $url = "https://api.twelvedata.com/price?symbol={$ticker}&apikey={$tdKey}";
+        try {
+            $finnhubKey = getApiKey('FINNHUB');
+            if ($finnhubKey) {
+                $url = "https://finnhub.io/api/v1/quote?symbol={$ticker}&token={$finnhubKey}";
                 $ch = curl_init();
                 curl_setopt($ch, CURLOPT_URL, $url);
                 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 8);
                 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 
                 $response = curl_exec($ch);
@@ -275,17 +301,21 @@ function fetchETFPrice($ticker) {
 
                 if ($httpCode === 200) {
                     $data = json_decode($response, true);
-                    if (isset($data['price'])) {
-                        $price = floatval($data['price']);
+                    if (isset($data['c']) && $data['c'] > 0) {
+                        $price = floatval($data['c']); // Current price
                     }
                 }
-            } catch (Exception $e) {
-                // All APIs failed
             }
+        } catch (Exception $e) {
+            // Continue
         }
     }
 
-    $result = ['price' => $price, 'nav' => $nav];
+    $result = [
+        'price' => $price,
+        'nav' => $nav ?: $price, // Use price as NAV if NAV not available
+        'sharesOutstanding' => $sharesOutstanding
+    ];
 
     // Cache the result (even if 0) to avoid repeated API calls
     setCache($cacheKey, $result);
