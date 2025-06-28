@@ -15,6 +15,9 @@ cache/
 # Archive directory (old files, not needed in repo)
 _archive/
 
+# Documentation (internal use only, not for public repo)
+docs/
+
 # System files
 .DS_Store
 .DS_Store?
