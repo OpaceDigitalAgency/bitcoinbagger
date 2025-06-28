@@ -66,10 +66,13 @@
 
             async loadBitcoinPrice() {
                 try {
-                    const data = await fetchBitcoinPrice();
-                    this.btcPrice = data.price;
-                    updateBitcoinPriceDisplay(data);
-                    document.getElementById('bitcoin-price').textContent = formatCurrency(data.price);
+                    const data = await window.bitcoinAPI.fetchBitcoinPrice();
+                    this.btcPrice = data.usd;
+                    document.getElementById('bitcoin-price').textContent = Utils.formatCurrency(data.usd);
+
+                    // Update nav price display
+                    const navPrice = document.getElementById('nav-btc-price');
+                    if (navPrice) navPrice.textContent = Utils.formatCurrency(data.usd);
                 } catch (error) {
                     console.error('Error loading Bitcoin price:', error);
                 }
@@ -78,7 +81,7 @@
             async loadETFs() {
                 try {
                     // Use the 100% dynamic ETF API
-                    const response = await fetch('api/etf-holdings.php');
+                    const response = await fetch('/api/etf-holdings.php');
                     const data = await response.json();
 
                     if (data.data) {
@@ -100,8 +103,8 @@
                 const avgPremium = this.etfs.length > 0 ?
                     this.etfs.reduce((sum, etf) => sum + (etf.premium || 0), 0) / this.etfs.length : 0;
 
-                document.getElementById('total-btc-held').textContent = formatNumber(totalBTC) + ' BTC';
-                document.getElementById('combined-aum').textContent = formatCurrency(combinedValue);
+                document.getElementById('total-btc-held').textContent = Utils.formatNumber(totalBTC) + ' BTC';
+                document.getElementById('combined-aum').textContent = Utils.formatCurrency(combinedValue);
                 document.getElementById('avg-premium').textContent = avgPremium.toFixed(1) + '%';
             }
 
@@ -128,11 +131,11 @@
                                     <div class="data-source">Source: ${etf.dataSource || 'Dynamic Discovery'}</div>
                                 </div>
                             </td>
-                            <td class="text-right">${formatNumber(etf.btcHeld)} BTC</td>
-                            <td class="text-right">${etf.sharesOutstanding ? formatNumber(etf.sharesOutstanding) : 'N/A'}</td>
+                            <td class="text-right">${Utils.formatNumber(etf.btcHeld)} BTC</td>
+                            <td class="text-right">${etf.sharesOutstanding ? Utils.formatNumber(etf.sharesOutstanding) : 'N/A'}</td>
                             <td class="text-right">${btcPerShare > 0 ? btcPerShare.toFixed(6) : 'N/A'}</td>
-                            <td class="text-right">${etf.price ? formatCurrency(etf.price) : 'N/A'}</td>
-                            <td class="text-right">${etf.nav ? formatCurrency(etf.nav) : 'N/A'}</td>
+                            <td class="text-right">${etf.price ? Utils.formatCurrency(etf.price) : 'N/A'}</td>
+                            <td class="text-right">${etf.nav ? Utils.formatCurrency(etf.nav) : 'N/A'}</td>
                             <td class="text-right ${premium !== 0 ? (premium >= 0 ? 'positive' : 'negative') : ''}">${premium !== 0 ? premium.toFixed(1) + '%' : 'N/A'}</td>
                         </tr>
                     `;

@@ -71,10 +71,13 @@
 
             async loadBitcoinPrice() {
                 try {
-                    const data = await fetchBitcoinPrice();
-                    this.btcPrice = data.price;
-                    updateBitcoinPriceDisplay(data);
-                    document.getElementById('bitcoin-price').textContent = formatCurrency(data.price);
+                    const data = await window.bitcoinAPI.fetchBitcoinPrice();
+                    this.btcPrice = data.usd;
+                    document.getElementById('bitcoin-price').textContent = Utils.formatCurrency(data.usd);
+
+                    // Update nav price display
+                    const navPrice = document.getElementById('nav-btc-price');
+                    if (navPrice) navPrice.textContent = Utils.formatCurrency(data.usd);
                 } catch (error) {
                     console.error('Error loading Bitcoin price:', error);
                 }
@@ -83,7 +86,7 @@
             async loadCompanies() {
                 try {
                     // Use the dynamic treasury API
-                    const response = await fetch('api/treasuries.php');
+                    const response = await fetch('/api/treasuries.php');
                     const data = await response.json();
 
                     if (data.data) {
@@ -102,8 +105,8 @@
                 const totalBTC = this.companies.reduce((sum, company) => sum + company.btcHeld, 0);
                 const combinedValue = totalBTC * this.btcPrice;
 
-                document.getElementById('total-btc-held').textContent = formatNumber(totalBTC) + ' BTC';
-                document.getElementById('combined-value').textContent = formatCurrency(combinedValue);
+                document.getElementById('total-btc-held').textContent = Utils.formatNumber(totalBTC) + ' BTC';
+                document.getElementById('combined-value').textContent = Utils.formatCurrency(combinedValue);
             }
 
             renderCompaniesTable() {
@@ -126,10 +129,10 @@
                                     <div class="company-business">${company.businessModel}</div>
                                 </div>
                             </td>
-                            <td class="text-right">${formatNumber(company.btcHeld)} BTC</td>
-                            <td class="text-right">${formatCurrency(btcValue)}</td>
-                            <td class="text-right">${marketCap > 0 ? formatCurrency(marketCap) : 'N/A'}</td>
-                            <td class="text-right">${stockPrice > 0 ? formatCurrency(stockPrice) : 'N/A'}</td>
+                            <td class="text-right">${Utils.formatNumber(company.btcHeld)} BTC</td>
+                            <td class="text-right">${Utils.formatCurrency(btcValue)}</td>
+                            <td class="text-right">${marketCap > 0 ? Utils.formatCurrency(marketCap) : 'N/A'}</td>
+                            <td class="text-right">${stockPrice > 0 ? Utils.formatCurrency(stockPrice) : 'N/A'}</td>
                             <td class="text-right">${bsp}</td>
                             <td class="text-right ${premium !== 'N/A' ? (parseFloat(premium) >= 0 ? 'positive' : 'negative') : ''}">${premium}${premium !== 'N/A' ? '%' : ''}</td>
                         </tr>
