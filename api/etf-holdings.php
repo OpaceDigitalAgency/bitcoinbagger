@@ -22,7 +22,8 @@ $API_KEYS = [
     'COINGECKO' => $_ENV['COINGECKO_API_KEY'] ?? '',
     'FMP' => $_ENV['FMP_API_KEY'] ?? '',
     'ALPHA_VANTAGE' => $_ENV['ALPHA_VANTAGE_API_KEY'] ?? '',
-    'TWELVEDATA' => $_ENV['TWELVEDATA_API_KEY'] ?? ''
+    'TWELVEDATA' => $_ENV['TWELVEDATA_API_KEY'] ?? '',
+    'FINNHUB' => $_ENV['FINNHUB_API_KEY'] ?? ''
 ];
 
 // Cache directory
@@ -104,20 +105,46 @@ function discoverBitcoinETFs() {
 
     $etfs = [];
 
-    // Method 1: CoinGecko search for Bitcoin ETFs
+    // Method 1: BitcoinETFData.com bulk endpoint (No API key needed!)
+    $etfs = array_merge($etfs, discoverETFsFromBitcoinETFData());
+
+    // Method 2: CoinGecko search for Bitcoin ETFs
     $etfs = array_merge($etfs, discoverETFsFromCoinGecko());
 
-    // Method 2: FMP ETF list search
+    // Method 3: FMP ETF list search
     $etfs = array_merge($etfs, discoverETFsFromFMP());
-
-    // Method 3: Known major ETFs as fallback (always use for now to ensure data)
-    $etfs = array_merge($etfs, getFallbackETFs());
 
     // Remove duplicates and filter
     $etfs = filterETFs($etfs);
 
     // Cache the discovered ETFs
     setCache($cacheKey, $etfs);
+
+    return $etfs;
+}
+
+function discoverETFsFromBitcoinETFData() {
+    // Use BitcoinETFData.com bulk endpoint to discover all Bitcoin ETFs
+    $etfs = [];
+
+    try {
+        $url = "https://btcetfdata.com/v1/current.json";
+        $data = fetchWithCurl($url, [], true, "btcetfdata_all", 3600); // 1 hour cache
+
+        if (!empty($data) && is_array($data)) {
+            foreach ($data as $ticker => $etfInfo) {
+                if (is_array($etfInfo) && !empty($etfInfo['name'])) {
+                    $etfs[$ticker] = [
+                        'name' => $etfInfo['name'],
+                        'type' => 'etf',
+                        'source' => 'BITCOINETFDATA_COM'
+                    ];
+                }
+            }
+        }
+    } catch (Exception $e) {
+        // BitcoinETFData.com failed, return empty array
+    }
 
     return $etfs;
 }
@@ -321,62 +348,102 @@ function fetchLiveETFData() {
                 ];
             }
         } catch (Exception $e) {
-            // If FMP fails (likely rate limit), try Alpha Vantage fallback
-            $avKey = getApiKey('ALPHA_VANTAGE');
-            if ($avKey && $avKey !== 'your_alpha_vantage_key_here') {
+            // FMP failed (likely rate limit), try specialized ETF data sources
+
+            // Method 1: BitcoinETFData.com (No API key needed!)
+            try {
+                $btcEtfUrl = "https://btcetfdata.com/v1/{$ticker}.json";
+                $btcEtfData = fetchWithCurl($btcEtfUrl, [], true, "btcetf_{$ticker}", 3600); // 1 hour cache
+
+                if (!empty($btcEtfData) && is_array($btcEtfData)) {
+                    $etfData[] = [
+                        'ticker' => $ticker,
+                        'name' => $btcEtfData['name'] ?? $info['name'],
+                        'btcHeld' => floatval($btcEtfData['bitcoin_holdings'] ?? $btcEtfData['btc_held'] ?? 0),
+                        'sharesOutstanding' => floatval($btcEtfData['shares_outstanding'] ?? 0),
+                        'lastUpdated' => date('Y-m-d H:i:s'),
+                        'dataSource' => 'BITCOINETFDATA_COM',
+                        'aum' => floatval($btcEtfData['aum'] ?? 0),
+                        'nav' => floatval($btcEtfData['nav'] ?? 0)
+                    ];
+                    continue;
+                }
+            } catch (Exception $btcEtfE) {
+                // BitcoinETFData.com failed, try Finnhub
+            }
+
+            // Method 2: Finnhub ETF Holdings (Free tier: 60 req/min)
+            $finnhubKey = getApiKey('FINNHUB');
+            if ($finnhubKey && $finnhubKey !== 'your_finnhub_key_here') {
                 try {
-                    $avUrl = "https://www.alphavantage.co/query?function=OVERVIEW&symbol={$ticker}&apikey={$avKey}";
-                    $avData = fetchWithCurl($avUrl, [], true, "av_etf_{$ticker}", 86400);
+                    $finnhubUrl = "https://finnhub.io/api/v1/etf/holdings?symbol={$ticker}&token={$finnhubKey}";
+                    $finnhubData = fetchWithCurl($finnhubUrl, [], true, "finnhub_{$ticker}", 3600);
 
-                    if (!empty($avData) && is_array($avData)) {
-                        // Estimate Bitcoin holdings from AUM for Bitcoin ETFs
-                        $aum = floatval($avData['MarketCapitalization'] ?? 0);
-                        $btcPrice = getCurrentBitcoinPrice();
-                        $estimatedBTC = $aum > 0 && $btcPrice > 0 ? round($aum / $btcPrice) : 0;
+                    if (!empty($finnhubData) && is_array($finnhubData)) {
+                        // Look for Bitcoin holdings in the holdings array
+                        $btcHeld = 0;
+                        if (isset($finnhubData['holdings']) && is_array($finnhubData['holdings'])) {
+                            foreach ($finnhubData['holdings'] as $holding) {
+                                $symbol = strtolower($holding['symbol'] ?? '');
+                                if (strpos($symbol, 'btc') !== false || strpos($symbol, 'bitcoin') !== false) {
+                                    $btcHeld += floatval($holding['share'] ?? 0);
+                                }
+                            }
+                        }
 
+                        if ($btcHeld > 0) {
+                            $etfData[] = [
+                                'ticker' => $ticker,
+                                'name' => $finnhubData['profile']['name'] ?? $info['name'],
+                                'btcHeld' => $btcHeld,
+                                'sharesOutstanding' => floatval($finnhubData['profile']['sharesOutstanding'] ?? 0),
+                                'lastUpdated' => date('Y-m-d H:i:s'),
+                                'dataSource' => 'FINNHUB_HOLDINGS',
+                                'aum' => floatval($finnhubData['profile']['aum'] ?? 0),
+                                'nav' => floatval($finnhubData['profile']['nav'] ?? 0)
+                            ];
+                            continue;
+                        }
+                    }
+                } catch (Exception $finnhubE) {
+                    // Finnhub failed, try Yahoo Finance
+                }
+            }
+
+            // Method 3: Yahoo Finance (No key, but rate limited)
+            try {
+                $yahooUrl = "https://query2.finance.yahoo.com/v10/finance/quoteSummary/{$ticker}?modules=topHoldings,fundProfile";
+                $yahooData = fetchWithCurl($yahooUrl, [], true, "yahoo_{$ticker}", 3600);
+
+                if (!empty($yahooData) && is_array($yahooData)) {
+                    $btcHeld = 0;
+                    // Parse Yahoo Finance response for Bitcoin holdings
+                    if (isset($yahooData['quoteSummary']['result'][0]['topHoldings']['holdings'])) {
+                        foreach ($yahooData['quoteSummary']['result'][0]['topHoldings']['holdings'] as $holding) {
+                            $symbol = strtolower($holding['symbol'] ?? '');
+                            if (strpos($symbol, 'btc') !== false || strpos($symbol, 'bitcoin') !== false) {
+                                $btcHeld += floatval($holding['holdingPercent'] ?? 0) * 100; // Convert percentage to actual holdings
+                            }
+                        }
+                    }
+
+                    if ($btcHeld > 0) {
+                        $profile = $yahooData['quoteSummary']['result'][0]['fundProfile'] ?? [];
                         $etfData[] = [
                             'ticker' => $ticker,
-                            'name' => $avData['Name'] ?? $info['name'],
-                            'btcHeld' => $estimatedBTC,
-                            'sharesOutstanding' => floatval($avData['SharesOutstanding'] ?? 0),
+                            'name' => $profile['name'] ?? $info['name'],
+                            'btcHeld' => $btcHeld,
+                            'sharesOutstanding' => floatval($profile['sharesOutstanding'] ?? 0),
                             'lastUpdated' => date('Y-m-d H:i:s'),
-                            'dataSource' => 'ALPHA_VANTAGE_ESTIMATED',
-                            'aum' => $aum,
-                            'nav' => floatval($avData['BookValue'] ?? 0)
+                            'dataSource' => 'YAHOO_FINANCE',
+                            'aum' => floatval($profile['totalAssets'] ?? 0),
+                            'nav' => floatval($profile['navPrice'] ?? 0)
                         ];
                         continue;
                     }
-                } catch (Exception $avE) {
-                    // Alpha Vantage failed, try TwelveData as final fallback
-                    $tdKey = getApiKey('TWELVEDATA');
-                    if ($tdKey && $tdKey !== 'your_twelvedata_key_here') {
-                        try {
-                            $tdUrl = "https://api.twelvedata.com/profile?symbol={$ticker}&apikey={$tdKey}";
-                            $tdData = fetchWithCurl($tdUrl, [], true, "td_etf_{$ticker}", 86400);
-
-                            if (!empty($tdData) && is_array($tdData)) {
-                                // Estimate Bitcoin holdings from market cap for Bitcoin ETFs
-                                $marketCap = floatval($tdData['market_capitalization'] ?? 0);
-                                $btcPrice = getCurrentBitcoinPrice();
-                                $estimatedBTC = $marketCap > 0 && $btcPrice > 0 ? round($marketCap / $btcPrice) : 0;
-
-                                $etfData[] = [
-                                    'ticker' => $ticker,
-                                    'name' => $tdData['name'] ?? $info['name'],
-                                    'btcHeld' => $estimatedBTC,
-                                    'sharesOutstanding' => floatval($tdData['shares_outstanding'] ?? 0),
-                                    'lastUpdated' => date('Y-m-d H:i:s'),
-                                    'dataSource' => 'TWELVEDATA_ESTIMATED',
-                                    'aum' => $marketCap,
-                                    'nav' => floatval($tdData['book_value'] ?? 0)
-                                ];
-                                continue;
-                            }
-                        } catch (Exception $tdE) {
-                            // All APIs failed
-                        }
-                    }
                 }
+            } catch (Exception $yahooE) {
+                // All specialized ETF APIs failed
             }
 
             // If all APIs fail, create entry with zero data (don't show ETFs with no data)
