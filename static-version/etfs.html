@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bitcoin Spot ETFs | BitcoinBagger</title>
+    <meta name="description" content="Track Bitcoin spot ETFs including IBIT, FBTC, GBTC, and BITB. Live holdings, premiums, and NAV data.">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+</head>
+<body>
+    <div id="loading-screen" class="loading-screen">
+        <div class="loading-content"><div class="loading-icon"></div><h2>Loading ETFs...</h2><p>Fetching live ETF data</p></div>
+    </div>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-left">
+                <a href="index.html" class="nav-brand"><i data-lucide="bitcoin" class="nav-logo"></i><span>BitcoinBagger</span></a>
+                <div class="nav-links">
+                    <a href="index.html" class="nav-link"><i data-lucide="home"></i><span>Home</span></a>
+                    <a href="companies.html" class="nav-link"><i data-lucide="building-2"></i><span>Companies</span></a>
+                    <a href="etfs.html" class="nav-link active"><i data-lucide="pie-chart"></i><span>ETFs</span></a>
+                </div>
+            </div>
+            <div class="nav-right">
+                <div class="btc-price-display"><span class="btc-label">BTC/USD</span><span id="nav-btc-price" class="btc-price">Loading...</span><span id="nav-btc-change" class="btc-change">--</span></div>
+                <button id="theme-toggle" class="theme-toggle"><i data-lucide="moon" id="theme-icon"></i></button>
+            </div>
+        </div>
+    </nav>
+    <main class="main-content container">
+        <header class="page-header">
+            <h1>Bitcoin Spot ETFs</h1>
+            <p>Exchange-traded funds that hold Bitcoin directly. Monitor live holdings, premiums, and NAV.</p>
+            <div class="overview-stats">
+                <div class="overview-card"><h3>Total ETF Holdings</h3><p id="total-etf-holdings">Loading...</p></div>
+                <div class="overview-card"><h3>Combined AUM</h3><p id="combined-aum">Loading...</p></div>
+                <div class="overview-card"><h3>Average Premium</h3><p id="average-premium">Loading...</p></div>
+                <div class="overview-card"><h3>Bitcoin Price</h3><p id="bitcoin-price-etf">Loading...</p></div>
+            </div>
+        </header>
+        <div class="table-section">
+            <div class="table-header"><h2>Bitcoin ETF Holdings</h2><select id="etf-sort-select" class="sort-select"><option value="btcHeld">Sort by BTC Holdings</option><option value="aum">Sort by AUM</option><option value="premium">Sort by Premium</option><option value="price">Sort by Price</option></select></div>
+            <div class="table-container"><table id="etfs-table" class="data-table"><thead><tr><th>ETF</th><th class="text-right">BTC Held</th><th class="text-right">Shares O/S</th><th class="text-right">BTC/Share</th><th class="text-right">Price</th><th class="text-right">NAV</th><th class="text-right">Premium</th></tr></thead><tbody></tbody></table></div>
+        </div>
+    </main>
+    <script src="public/js/api.js"></script>
+    <script src="public/js/utils.js"></script>
+    <script>
+        // Updated etfs.js to use 100% dynamic discovery
+        class ETFsPage {
+            constructor() {
+                this.etfs = [];
+                this.btcPrice = 0;
+                this.sortBy = 'btcHeld';
+                this.init();
+            }
+
+            async init() {
+                await this.loadBitcoinPrice();
+                await this.loadETFs();
+                this.setupEventListeners();
+                this.hideLoadingScreen();
+                this.startAutoRefresh();
+            }
+
+            async loadBitcoinPrice() {
+                try {
+                    const data = await fetchBitcoinPrice();
+                    this.btcPrice = data.price;
+                    updateBitcoinPriceDisplay(data);
+                    document.getElementById('bitcoin-price').textContent = formatCurrency(data.price);
+                } catch (error) {
+                    console.error('Error loading Bitcoin price:', error);
+                }
+            }
+
+            async loadETFs() {
+                try {
+                    // Use the 100% dynamic ETF API
+                    const response = await fetch('api/etf-holdings.php');
+                    const data = await response.json();
+
+                    if (data.data) {
+                        this.etfs = data.data.filter(etf => etf.btcHeld > 0); // Only show ETFs with actual holdings
+                        this.updateOverviewStats();
+                        this.renderETFsTable();
+                    } else {
+                        this.showError('No ETF data available - discovery in progress');
+                    }
+                } catch (error) {
+                    console.error('Error loading ETFs:', error);
+                    this.showError('Failed to load ETF data');
+                }
+            }
+
+            updateOverviewStats() {
+                const totalBTC = this.etfs.reduce((sum, etf) => sum + etf.btcHeld, 0);
+                const combinedValue = totalBTC * this.btcPrice;
+                const avgPremium = this.etfs.length > 0 ?
+                    this.etfs.reduce((sum, etf) => sum + (etf.premium || 0), 0) / this.etfs.length : 0;
+
+                document.getElementById('total-btc-held').textContent = formatNumber(totalBTC) + ' BTC';
+                document.getElementById('combined-aum').textContent = formatCurrency(combinedValue);
+                document.getElementById('avg-premium').textContent = avgPremium.toFixed(1) + '%';
+            }
+
+            renderETFsTable() {
+                const tbody = document.querySelector('#etfs-table tbody');
+                const sortedETFs = this.getSortedETFs();
+
+                if (sortedETFs.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="no-data">No Bitcoin ETFs discovered yet. Dynamic discovery in progress...</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = sortedETFs.map(etf => {
+                    const btcValue = etf.btcHeld * this.btcPrice;
+                    const btcPerShare = etf.sharesOutstanding > 0 ? (etf.btcHeld / etf.sharesOutstanding) : 0;
+                    const premium = etf.premium || 0;
+
+                    return `
+                        <tr>
+                            <td>
+                                <div class="etf-info">
+                                    <div class="etf-name">${etf.name}</div>
+                                    <div class="etf-ticker">${etf.ticker}</div>
+                                    <div class="data-source">Source: ${etf.dataSource || 'Dynamic Discovery'}</div>
+                                </div>
+                            </td>
+                            <td class="text-right">${formatNumber(etf.btcHeld)} BTC</td>
+                            <td class="text-right">${etf.sharesOutstanding ? formatNumber(etf.sharesOutstanding) : 'N/A'}</td>
+                            <td class="text-right">${btcPerShare > 0 ? btcPerShare.toFixed(6) : 'N/A'}</td>
+                            <td class="text-right">${etf.price ? formatCurrency(etf.price) : 'N/A'}</td>
+                            <td class="text-right">${etf.nav ? formatCurrency(etf.nav) : 'N/A'}</td>
+                            <td class="text-right ${premium !== 0 ? (premium >= 0 ? 'positive' : 'negative') : ''}">${premium !== 0 ? premium.toFixed(1) + '%' : 'N/A'}</td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+            getSortedETFs() {
+                return [...this.etfs].sort((a, b) => {
+                    switch (this.sortBy) {
+                        case 'btcValue':
+                            return (b.btcHeld * this.btcPrice) - (a.btcHeld * this.btcPrice);
+                        case 'sharesOutstanding':
+                            return (b.sharesOutstanding || 0) - (a.sharesOutstanding || 0);
+                        case 'premium':
+                            return (b.premium || 0) - (a.premium || 0);
+                        case 'btcHeld':
+                        default:
+                            return b.btcHeld - a.btcHeld;
+                    }
+                });
+            }
+
+            setupEventListeners() {
+                document.getElementById('sort-select').addEventListener('change', (e) => {
+                    this.sortBy = e.target.value;
+                    this.renderETFsTable();
+                });
+            }
+
+            hideLoadingScreen() {
+                setTimeout(() => {
+                    document.getElementById('loading-screen').style.display = 'none';
+                }, 1000);
+            }
+
+            startAutoRefresh() {
+                // Refresh Bitcoin price every 2 minutes
+                setInterval(() => this.loadBitcoinPrice(), 120000);
+
+                // Refresh ETF data every 30 minutes (since it's cached)
+                setInterval(() => this.loadETFs(), 1800000);
+            }
+
+            showError(message) {
+                const tbody = document.querySelector('#etfs-table tbody');
+                tbody.innerHTML = `<tr><td colspan="7" class="error-cell">${message}</td></tr>`;
+            }
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new ETFsPage();
+        });
+    </script>
+</body>
+</html>
