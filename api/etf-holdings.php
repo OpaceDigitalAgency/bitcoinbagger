@@ -55,6 +55,8 @@ function getApiKey($provider) {
     return $key;
 }
 
+
+
 function fetchWithCurl($url, $headers = [], $useCache = false, $cacheKey = null, $cacheTime = 3600) {
     // Check cache first if enabled
     if ($useCache && $cacheKey) {
@@ -319,11 +321,41 @@ function fetchLiveETFData() {
                 ];
             }
         } catch (Exception $e) {
-            // If FMP fails, create entry with estimated data
+            // If FMP fails (likely rate limit), try Alpha Vantage fallback
+            $avKey = getApiKey('ALPHA_VANTAGE');
+            if ($avKey && $avKey !== 'your_alpha_vantage_key_here') {
+                try {
+                    $avUrl = "https://www.alphavantage.co/query?function=OVERVIEW&symbol={$ticker}&apikey={$avKey}";
+                    $avData = fetchWithCurl($avUrl, [], true, "av_etf_{$ticker}", 86400);
+
+                    if (!empty($avData) && is_array($avData)) {
+                        // Estimate Bitcoin holdings from AUM for Bitcoin ETFs
+                        $aum = floatval($avData['MarketCapitalization'] ?? 0);
+                        $btcPrice = getCurrentBitcoinPrice();
+                        $estimatedBTC = $aum > 0 && $btcPrice > 0 ? round($aum / $btcPrice) : 0;
+
+                        $etfData[] = [
+                            'ticker' => $ticker,
+                            'name' => $avData['Name'] ?? $info['name'],
+                            'btcHeld' => $estimatedBTC,
+                            'sharesOutstanding' => floatval($avData['SharesOutstanding'] ?? 0),
+                            'lastUpdated' => date('Y-m-d H:i:s'),
+                            'dataSource' => 'ALPHA_VANTAGE_ESTIMATED',
+                            'aum' => $aum,
+                            'nav' => floatval($avData['BookValue'] ?? 0)
+                        ];
+                        continue;
+                    }
+                } catch (Exception $avE) {
+                    // Alpha Vantage also failed
+                }
+            }
+
+            // If all APIs fail, create entry with zero data (don't show ETFs with no data)
             $etfData[] = [
                 'ticker' => $ticker,
                 'name' => $info['name'],
-                'btcHeld' => estimateETFBitcoinHoldings($ticker, null, null),
+                'btcHeld' => 0,
                 'sharesOutstanding' => estimateSharesOutstanding($ticker),
                 'lastUpdated' => date('Y-m-d H:i:s'),
                 'dataSource' => 'ESTIMATED_LIVE',
