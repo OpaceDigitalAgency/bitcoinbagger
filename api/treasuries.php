@@ -91,11 +91,11 @@ function getCurrentBitcoinPrice() {
             return $cachedPrice;
         }
     } catch (Exception $e) {
-        // Use fallback price
+        // No fallback - return 0 if API fails
     }
 
-    // Emergency fallback - use a reasonable Bitcoin price
-    return 107000; // Approximate current Bitcoin price
+    // If all APIs fail, return 0 - no hardcoded data
+    return 0;
 }
 
 // Fetch stock price with caching and multiple free APIs
@@ -1074,19 +1074,8 @@ function fetchETFHoldingsFromCoinGecko($ticker, $companyData) {
             }
         }
 
-        // Fallback: estimate based on known ETF holdings
-        $knownETFHoldings = [
-            'IBIT' => 630000,  // iShares Bitcoin Trust
-            'GBTC' => 220000,  // Grayscale Bitcoin Trust
-            'FBTC' => 180000,  // Fidelity Bitcoin Fund
-            'ARKB' => 55000,   // ARK 21Shares
-            'BITB' => 42000,   // Bitwise Bitcoin ETF
-            'BTCO' => 12000,   // Invesco Galaxy
-            'BRRR' => 3500,    // Valkyrie
-            'HODL' => 8500,    // VanEck
-        ];
-
-        return $knownETFHoldings[strtoupper($ticker)] ?? 0;
+        // No fallback data - return 0 if APIs fail
+        return 0;
 
     } catch (Exception $e) {
         return 0;
@@ -1249,48 +1238,17 @@ try {
         ];
         echo json_encode($response);
     } else {
-        // Return minimal fallback data for known major companies
-        $fallbackData = [
-            [
-                'ticker' => 'MSTR',
-                'name' => 'MicroStrategy Inc.',
-                'btcHeld' => 190000, // Approximate known holdings
-                'businessModel' => 'Business Intelligence & Bitcoin Treasury',
-                'type' => 'stock',
-                'stockPrice' => 0,
-                'marketCap' => 0,
-                'sharesOutstanding' => 0,
-                'bitcoinPerShare' => 0,
-                'lastUpdated' => date('Y-m-d H:i:s'),
-                'dataSource' => 'EMERGENCY_FALLBACK'
-            ],
-            [
-                'ticker' => 'TSLA',
-                'name' => 'Tesla Inc.',
-                'btcHeld' => 9720,
-                'businessModel' => 'Electric Vehicles & Energy Storage',
-                'type' => 'stock',
-                'stockPrice' => 0,
-                'marketCap' => 0,
-                'sharesOutstanding' => 0,
-                'bitcoinPerShare' => 0,
-                'lastUpdated' => date('Y-m-d H:i:s'),
-                'dataSource' => 'EMERGENCY_FALLBACK'
-            ]
-        ];
-
+        // No fallback data - return error if all APIs fail
         http_response_code(503); // Service Temporarily Unavailable
         echo json_encode([
             'success' => false,
-            'error' => 'Treasury data temporarily unavailable',
-            'fallback_data' => $fallbackData,
+            'error' => 'Treasury data temporarily unavailable - all APIs failed',
             'meta' => [
                 'timestamp' => time(),
                 'datetime' => date('Y-m-d H:i:s'),
-                'source' => 'EMERGENCY_FALLBACK',
-                'warning' => 'Using emergency fallback data - not real-time',
-                'totalCompanies' => count($fallbackData),
-                'status' => 'DEGRADED_SERVICE'
+                'source' => 'API_FAILURE',
+                'warning' => 'No fallback data available - APIs must be working',
+                'status' => 'SERVICE_UNAVAILABLE'
             ]
         ]);
     }

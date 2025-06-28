@@ -188,63 +188,8 @@ function fetchLiveETFData() {
         return $etfData;
     }
 
-    // If all API sources fail, use known ETF data with realistic holdings
-    $knownETFs = [
-        'IBIT' => [
-            'name' => 'iShares Bitcoin Trust',
-            'btcHeld' => 630000,
-            'aum' => 50000000000
-        ],
-        'FBTC' => [
-            'name' => 'Fidelity Wise Origin Bitcoin Fund',
-            'btcHeld' => 180000,
-            'aum' => 15000000000
-        ],
-        'GBTC' => [
-            'name' => 'Grayscale Bitcoin Trust',
-            'btcHeld' => 220000,
-            'aum' => 18000000000
-        ],
-        'ARKB' => [
-            'name' => 'ARK 21Shares Bitcoin ETF',
-            'btcHeld' => 55000,
-            'aum' => 4500000000
-        ],
-        'BITB' => [
-            'name' => 'Bitwise Bitcoin ETF',
-            'btcHeld' => 42000,
-            'aum' => 3500000000
-        ],
-        'BTCO' => [
-            'name' => 'Invesco Galaxy Bitcoin ETF',
-            'btcHeld' => 12000,
-            'aum' => 1000000000
-        ],
-        'BRRR' => [
-            'name' => 'Valkyrie Bitcoin Fund',
-            'btcHeld' => 3500,
-            'aum' => 300000000
-        ]
-    ];
-
-    foreach ($knownETFs as $ticker => $info) {
-        // Try to get live price data even for fallback
-        $priceData = fetchETFPrice($ticker);
-
-        $etfData[] = [
-            'ticker' => $ticker,
-            'name' => $info['name'],
-            'btcHeld' => $info['btcHeld'],
-            'sharesOutstanding' => $priceData['sharesOutstanding'] ?? 0,
-            'nav' => $priceData['nav'],
-            'price' => $priceData['price'],
-            'aum' => $info['aum'],
-            'expenseRatio' => 0,
-            'lastUpdated' => date('Y-m-d H:i:s'),
-            'dataSource' => 'KNOWN_ETF_FALLBACK',
-            'warning' => 'Using known ETF data - live APIs unavailable'
-        ];
-    }
+    // If all API sources fail, return empty array - no hardcoded data
+    error_log("BitcoinBagger: All ETF API sources failed - returning empty data");
 
     return $etfData;
 }
@@ -593,11 +538,11 @@ function getCurrentBitcoinPrice() {
             return $cachedPrice;
         }
     } catch (Exception $e) {
-        // Use fallback price
+        // No fallback - return 0 if API fails
     }
 
-    // Emergency fallback - use a reasonable Bitcoin price
-    return 107000; // Approximate current Bitcoin price
+    // If all APIs fail, return 0 - no hardcoded data
+    return 0;
 }
 
 // Fetch ETF price with multiple fallbacks including free APIs
