@@ -91,32 +91,37 @@ deployment:
       ErrorDocument 404 /index.html
       EOF
     
-    # Create environment file for API keys (you'll need to add your keys)
+    # Create environment file ONLY if it doesn't exist (preserves your API keys)
     - |
-      cat > $DEPLOYPATH/api/.env << 'EOF'
+      if [ ! -f $DEPLOYPATH/api/.env ]; then
+        cat > $DEPLOYPATH/api/.env << 'EOF'
       # BitcoinBagger API Configuration
       # Add your API keys here after deployment
-      
+
       # CoinGecko API (Primary)
       COINGECKO_API_KEY=your_coingecko_key_here
-      
+
       # Financial Modeling Prep (Fallback)
       FMP_API_KEY=your_fmp_key_here
-      
+
       # Alpha Vantage (Fallback)
       ALPHA_VANTAGE_API_KEY=your_alpha_vantage_key_here
-      
+
       # TwelveData (Fallback)
       TWELVEDATA_API_KEY=your_twelvedata_key_here
-      
+
       # Cache settings
       CACHE_DURATION_COMPANIES=86400
       CACHE_DURATION_PRICE=60
       CACHE_DURATION_ETFS=86400
       EOF
-    
-    # Set environment file permissions
-    - /bin/chmod 600 $DEPLOYPATH/api/.env
+        echo "Created new .env file - please add your API keys"
+      else
+        echo "Existing .env file preserved - API keys maintained"
+      fi
+
+    # Set environment file permissions (only if file exists)
+    - /bin/chmod 600 $DEPLOYPATH/api/.env 2>/dev/null || true
     
     # Create deployment log
     - echo "BitcoinBagger V4 deployed successfully at $(date)" >> $DEPLOYPATH/deployment.log
