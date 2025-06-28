@@ -126,7 +126,7 @@
                 tbody.innerHTML = sortedCompanies.map(company => {
                     const btcValue = company.btcHeld * this.btcPrice;
                     const marketCap = company.marketCap || 0;
-                    const stockPrice = company.price || 0;
+                    const stockPrice = company.stockPrice || 0;
                     const bsp = stockPrice > 0 ? (btcValue / stockPrice).toFixed(2) : 'N/A';
                     const premium = marketCap > 0 && btcValue > 0 ? (((marketCap - btcValue) / btcValue) * 100).toFixed(1) : 'N/A';
 
