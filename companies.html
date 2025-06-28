@@ -203,6 +203,8 @@
 
         // Initialize when page loads
         document.addEventListener('DOMContentLoaded', () => {
+            Utils.initTheme();
+            if (window.lucide) window.lucide.createIcons();
             new CompaniesPage();
         });
     </script>

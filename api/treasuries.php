@@ -28,6 +28,13 @@ $API_KEYS = [
     'FINNHUB' => $_ENV['FINNHUB_API_KEY'] ?? ''
 ];
 
+// Company name mapping for numeric IDs from CoinGecko
+$COMPANY_NAME_MAPPING = [
+    '3350' => ['name' => 'Metaplanet Inc.', 'ticker' => 'MPLANET'],
+    '3659' => ['name' => 'Nexon Co Ltd', 'ticker' => 'NEXON'],
+    'NA' => ['name' => 'Unknown Company', 'ticker' => 'UNKNOWN']
+];
+
 // Cache directory
 $CACHE_DIR = __DIR__ . '/cache/';
 if (!file_exists($CACHE_DIR)) {
@@ -703,9 +710,19 @@ function fetchLiveTreasuryData() {
                     $bitcoinPerShare = $btcHeld / $sharesOutstanding;
                 }
 
+                // Fix company names for numeric IDs
+                global $COMPANY_NAME_MAPPING;
+                $displayName = $companyData['companyName'] ?? $info['name'];
+                $displayTicker = $ticker;
+
+                if (isset($COMPANY_NAME_MAPPING[$ticker])) {
+                    $displayName = $COMPANY_NAME_MAPPING[$ticker]['name'];
+                    $displayTicker = $COMPANY_NAME_MAPPING[$ticker]['ticker'];
+                }
+
                 $treasuryData[] = [
-                    'ticker' => $ticker,
-                    'name' => $companyData['companyName'] ?? $info['name'],
+                    'ticker' => $displayTicker,
+                    'name' => $displayName,
                     'btcHeld' => $btcHeld,
                     'businessModel' => $info['businessModel'],
                     'type' => $info['type'],

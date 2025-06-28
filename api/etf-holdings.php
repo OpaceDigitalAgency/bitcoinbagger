@@ -57,22 +57,33 @@ function fetchLiveETFData() {
                             $priceData = fetchETFPrice(strtoupper($ticker));
                         }
 
-                        // Only include ETFs where we have price data
                         $price = $priceData['price'] ?: floatval($etfInfo['price'] ?? 0);
-                        if ($price > 0) {
-                            $etfData[] = [
-                                'ticker' => strtoupper($ticker),
-                                'name' => $etfInfo['name'] ?? $ticker . ' Bitcoin ETF',
-                                'btcHeld' => floatval($etfInfo['holdings']),
-                                'sharesOutstanding' => $priceData['sharesOutstanding'] ?: floatval($etfInfo['shares_outstanding'] ?? 0),
-                                'nav' => $priceData['nav'] ?: floatval($etfInfo['nav'] ?? 0),
-                                'price' => $price,
-                                'aum' => floatval($etfInfo['aum'] ?? 0),
-                                'expenseRatio' => floatval($etfInfo['expense_ratio'] ?? 0),
-                                'lastUpdated' => date('Y-m-d H:i:s'),
-                                'dataSource' => 'BITCOINETFDATA_COM_LIVE'
-                            ];
+                        $nav = $priceData['nav'] ?: floatval($etfInfo['nav'] ?? 0);
+                        $aum = floatval($etfInfo['aum'] ?? 0);
+                        $sharesOutstanding = $priceData['sharesOutstanding'] ?: floatval($etfInfo['shares_outstanding'] ?? 0);
+
+                        // Calculate shares outstanding from AUM and price if not available
+                        if ($sharesOutstanding == 0 && $aum > 0 && $price > 0) {
+                            $sharesOutstanding = $aum / $price;
                         }
+
+                        // Use price as NAV if NAV not available
+                        if ($nav == 0 && $price > 0) {
+                            $nav = $price;
+                        }
+
+                        $etfData[] = [
+                            'ticker' => strtoupper($ticker),
+                            'name' => $etfInfo['name'] ?? $ticker . ' Bitcoin ETF',
+                            'btcHeld' => floatval($etfInfo['holdings']),
+                            'sharesOutstanding' => $sharesOutstanding,
+                            'nav' => $nav,
+                            'price' => $price,
+                            'aum' => $aum,
+                            'expenseRatio' => floatval($etfInfo['expense_ratio'] ?? 0),
+                            'lastUpdated' => date('Y-m-d H:i:s'),
+                            'dataSource' => 'BITCOINETFDATA_COM_LIVE'
+                        ];
                     }
                 }
 
@@ -209,21 +220,28 @@ function fetchETFPrice($ticker) {
     $nav = 0;
     $sharesOutstanding = 0;
 
-    // Try Yahoo Finance first (free, no API key required)
+    // Try Finnhub first (free tier available)
     try {
-        $url = "https://query1.finance.yahoo.com/v8/finance/chart/{$ticker}";
-        $context = stream_context_create([
-            'http' => [
-                'timeout' => 8,
-                'user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            ]
-        ]);
+        $finnhubKey = getApiKey('FINNHUB');
+        if ($finnhubKey) {
+            $url = "https://finnhub.io/api/v1/quote?symbol={$ticker}&token={$finnhubKey}";
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 8);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_USERAGENT, 'BitcoinBagger/1.0');
 
-        $response = file_get_contents($url, false, $context);
-        if ($response !== false) {
-            $data = json_decode($response, true);
-            if (isset($data['chart']['result'][0]['meta']['regularMarketPrice'])) {
-                $price = floatval($data['chart']['result'][0]['meta']['regularMarketPrice']);
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($httpCode === 200) {
+                $data = json_decode($response, true);
+                if (isset($data['c']) && $data['c'] > 0) {
+                    $price = floatval($data['c']); // Current price
+                    $nav = $price; // For ETFs, use price as NAV approximation
+                }
             }
         }
     } catch (Exception $e) {
