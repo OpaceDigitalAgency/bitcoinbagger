@@ -365,11 +365,11 @@ function parseAssetValue($assetStr) {
         $multiplier = 1000; // Thousand
         $assetStr = str_replace(['K', 'k'], '', $assetStr);
     } else {
-        // ETFdb.com returns large ETF assets without suffix (e.g., "673,680" for $673.68B)
-        // If the number is > 100,000 and no suffix, assume it's in millions
+        // ETFdb.com returns large ETF assets without suffix (e.g., "74,655" for $74.655B)
+        // For major ETFs, if the number is > 1,000 and no suffix, assume it's in millions
         $value = floatval($assetStr);
-        if ($value > 100000) {
-            $multiplier = 1000000; // Treat as millions (so 673,680 becomes $673.68B)
+        if ($value > 1000) {
+            $multiplier = 1000000; // Treat as millions (so 74,655 becomes $74.655B)
         }
     }
 
