@@ -24,7 +24,8 @@ $API_KEYS = [
     'COINGECKO' => $_ENV['COINGECKO_API_KEY'] ?? '',
     'FMP' => $_ENV['FMP_API_KEY'] ?? '',
     'ALPHA_VANTAGE' => $_ENV['ALPHA_VANTAGE_API_KEY'] ?? '',
-    'TWELVEDATA' => $_ENV['TWELVEDATA_API_KEY'] ?? ''
+    'TWELVEDATA' => $_ENV['TWELVEDATA_API_KEY'] ?? '',
+    'FINNHUB' => $_ENV['FINNHUB_API_KEY'] ?? ''
 ];
 
 // Cache directory
