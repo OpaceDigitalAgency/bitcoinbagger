@@ -77,19 +77,7 @@ function getCurrentBitcoinPrice() {
         return $cachedPrice;
     }
 
-    try {
-        // Try to get Bitcoin price from our own API first
-        $response = file_get_contents(__DIR__ . '/../api/btc-price.php');
-        $data = json_decode($response, true);
-
-        if (isset($data['success']) && $data['success'] && isset($data['data']['usd'])) {
-            $cachedPrice = floatval($data['data']['usd']);
-            $cacheTime = time();
-            return $cachedPrice;
-        }
-    } catch (Exception $e) {
-        // Fallback to direct API call
-    }
+    // Skip internal API call to avoid potential loops - go directly to external API
 
     // Fallback: Direct CoinGecko call
     try {
