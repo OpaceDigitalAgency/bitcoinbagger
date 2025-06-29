@@ -26,39 +26,8 @@ function getFMPKey() {
     return $_ENV['FMP_API_KEY'] ?? '';
 }
 
-// Get Bitcoin holdings from BitcoinETFData.com
-function getBitcoinHoldingsFromBitcoinETFData($bitcoinETFs) {
-    $holdingsData = [];
-
-    try {
-        $context = stream_context_create([
-            'http' => [
-                'timeout' => 10,
-                'user_agent' => 'BitcoinBagger/1.0'
-            ]
-        ]);
-
-        $response = file_get_contents('https://btcetfdata.com/v1/current.json', false, $context);
-        if ($response !== false) {
-            $data = json_decode($response, true);
-
-            if (!empty($data) && isset($data['data'])) {
-                foreach ($data['data'] as $ticker => $etfInfo) {
-                    if (isset($etfInfo['holdings']) && $etfInfo['holdings'] > 0) {
-                        $holdingsData[strtoupper($ticker)] = [
-                            'name' => $etfInfo['name'] ?? $bitcoinETFs[strtoupper($ticker)] ?? $ticker . ' Bitcoin ETF',
-                            'btcHeld' => floatval($etfInfo['holdings'])
-                        ];
-                    }
-                }
-            }
-        }
-    } catch (Exception $e) {
-        error_log("BitcoinETFData.com failed: " . $e->getMessage());
-    }
-
-    return $holdingsData;
-}
+// REMOVED: getBitcoinHoldingsFromBitcoinETFData function
+// Using only FMP ETF Holdings API for all Bitcoin ETF data
 
 // Get ETF holdings from FMP
 function getFMPETFHoldings($ticker) {
@@ -151,51 +120,62 @@ function getCurrentBitcoinPrice() {
 function fetchLiveETFData() {
     $etfData = [];
 
-    // COMPREHENSIVE BITCOIN ETF LIST - All known Bitcoin ETFs
+    // COMPREHENSIVE BITCOIN ETF LIST - Based on ETFdb.com complete list
     $bitcoinETFs = [
-        // US Spot Bitcoin ETFs (Approved January 2024)
-        'IBIT' => 'iShares Bitcoin Trust',
+        // US Spot Bitcoin ETFs (Physical Bitcoin ETFs - January 2024 launches)
+        'IBIT' => 'iShares Bitcoin Trust ETF',
         'FBTC' => 'Fidelity Wise Origin Bitcoin Fund',
-        'GBTC' => 'Grayscale Bitcoin Trust',
+        'GBTC' => 'Grayscale Bitcoin Trust ETF',
         'ARKB' => 'ARK 21Shares Bitcoin ETF',
-        'BITB' => 'Bitwise Bitcoin ETF',
+        'BITB' => 'Bitwise Bitcoin ETF Trust',
         'BTCO' => 'Invesco Galaxy Bitcoin ETF',
-        'HODL' => 'VanEck Bitcoin Trust',
-        'BRRR' => 'Valkyrie Bitcoin Fund',
+        'HODL' => 'VanEck Bitcoin ETF',
+        'BRRR' => 'Coinshares Valkyrie Bitcoin Fund',
         'EZBC' => 'Franklin Bitcoin ETF',
-        'DEFI' => 'Hashdex Bitcoin ETF',
         'BTCW' => 'WisdomTree Bitcoin Fund',
 
         // Grayscale Mini Trust
-        'BTC' => 'Grayscale Bitcoin Mini Trust',
+        'BTC' => 'Grayscale Bitcoin Mini Trust ETF',
 
-        // Canadian Bitcoin ETFs
+        // Bitcoin Futures and Strategy ETFs
+        'BITO' => 'ProShares Bitcoin ETF',
+        'BITX' => '2x Bitcoin Strategy ETF',
+        'BITU' => 'ProShares Ultra Bitcoin ETF',
+        'BITI' => 'ProShares Short Bitcoin ETF',
+        'SBIT' => 'ProShares UltraShort Bitcoin ETF',
+
+        // Bitcoin Income and Strategy ETFs
+        'BTCI' => 'NEOS Bitcoin High Income ETF',
+        'SPBC' => 'Simplify US Equity PLUS Bitcoin Strategy ETF',
+
+        // Crypto Industry and Mining ETFs (Bitcoin-related)
+        'BITQ' => 'Bitwise Crypto Industry Innovators ETF',
+        'WGMI' => 'CoinShares Valkyrie Bitcoin Miners ETF',
+        'STCE' => 'Schwab Crypto Thematic ETF',
+
+        // MicroStrategy Leveraged ETFs (Bitcoin proxy)
+        'MSTX' => 'Defiance Daily Target 2x Long MSTR ETF',
+        'MST' => 'Defiance Leveraged Long Income MSTR ETF',
+
+        // Multi-Crypto ETFs (includes Bitcoin)
+        'NCIQ' => 'Hashdex Nasdaq Crypto Index US ETF',
+
+        // Canadian Bitcoin ETFs (for completeness)
         'BTCC' => 'Purpose Bitcoin ETF',
-        'EBIT' => 'Evolve Bitcoin ETF',
-        'QBTC' => 'Accelerate Bitcoin ETF',
-
-        // European Bitcoin ETFs
-        'BTCE' => 'ETC Group Physical Bitcoin',
-        'SBTC' => 'VanEck Bitcoin ETN',
-        '21XB' => '21Shares Bitcoin ETP'
+        'EBIT' => 'Evolve Bitcoin ETF'
     ];
 
-    // STEP 1: Get Bitcoin holdings from trusted sources only
+    // STEP 1: Get Bitcoin holdings from FMP ETF Holdings API only
     $holdingsData = [];
 
-    // PRIMARY: BitcoinETFData.com (works perfectly for major ETFs)
-    $holdingsData = getBitcoinHoldingsFromBitcoinETFData($bitcoinETFs);
-
-    // SECONDARY: FMP ETF Holdings (for any missing ETFs)
+    // Use FMP ETF Holdings API for ALL Bitcoin ETFs
     foreach ($bitcoinETFs as $ticker => $name) {
-        if (!isset($holdingsData[$ticker])) {
-            $fmpHoldings = getFMPETFHoldings($ticker);
-            if ($fmpHoldings > 0) {
-                $holdingsData[$ticker] = [
-                    'name' => $name,
-                    'btcHeld' => $fmpHoldings
-                ];
-            }
+        $fmpHoldings = getFMPETFHoldings($ticker);
+        if ($fmpHoldings > 0) {
+            $holdingsData[$ticker] = [
+                'name' => $name,
+                'btcHeld' => $fmpHoldings
+            ];
         }
     }
 
@@ -253,7 +233,7 @@ function fetchLiveETFData() {
             'expenseRatio' => 0, // Not available from FMP basic quote
             'volume' => $etfFinancialData['volume'] ?? 0,
             'lastUpdated' => date('Y-m-d H:i:s'),
-            'dataSource' => isset($holdingsData[$ticker]) ? 'BITCOINETFDATA_COM' : 'FMP_CALCULATED'
+            'dataSource' => isset($holdingsData[$ticker]) ? 'FMP_ETF_HOLDINGS' : 'FMP_PRICE_ONLY'
         ];
     }
 
@@ -357,7 +337,7 @@ try {
             'totalBTC' => $totalBTC,
             'totalAUM' => $totalAUM,
             'data_freshness' => 'REAL_TIME',
-            'apis_used' => ['FMP_STARTER', 'BITCOINETFDATA_COM', 'COINGECKO']
+            'apis_used' => ['FMP_STARTER', 'COINGECKO']
         ]
     ]);
 
