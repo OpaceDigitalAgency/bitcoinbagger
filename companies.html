@@ -45,7 +45,78 @@
             </div>
         </header>
         <div class="table-section">
-            <div class="table-header"><h2>Bitcoin Holdings by Company</h2><select id="sort-select" class="sort-select"><option value="btcHeld">Sort by BTC Holdings</option><option value="btcValue">Sort by BTC Value</option><option value="marketCap">Sort by Market Cap</option><option value="premium">Sort by Premium</option></select></div>
+            <div class="table-header">
+                <h2>Bitcoin Holdings by Company</h2>
+                <div class="table-controls">
+                    <button id="companies-legend-toggle" class="legend-toggle">
+                        <i data-lucide="help-circle"></i>
+                        <span>Column Guide</span>
+                    </button>
+                    <select id="sort-select" class="sort-select">
+                        <option value="btcHeld">Sort by BTC Holdings</option>
+                        <option value="btcValue">Sort by BTC Value</option>
+                        <option value="marketCap">Sort by Market Cap</option>
+                        <option value="premium">Sort by Premium</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Companies Legend/Guide Panel -->
+            <div id="companies-legend-panel" class="legend-panel hidden">
+                <div class="legend-content">
+                    <div class="legend-header">
+                        <h3><i data-lucide="info"></i> Column Definitions</h3>
+                        <button id="companies-legend-close" class="legend-close">
+                            <i data-lucide="x"></i>
+                        </button>
+                    </div>
+                    <div class="legend-grid">
+                        <div class="legend-item">
+                            <div class="legend-term">BTC Held</div>
+                            <div class="legend-definition">Total Bitcoin holdings owned by the company (in BTC)</div>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-term">BTC Value</div>
+                            <div class="legend-definition">Current USD value of the company's Bitcoin holdings</div>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-term">Market Cap</div>
+                            <div class="legend-definition">Total market capitalization of the company (stock price × shares outstanding)</div>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-term">Stock Price</div>
+                            <div class="legend-definition">Current market price per share of the company's stock (USD)</div>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-term">BSP</div>
+                            <div class="legend-definition">Bitcoin per Share Price - The value of Bitcoin holdings per share of stock
+                                <div class="legend-note">
+                                    <strong>Formula:</strong> (BTC Held ÷ Shares Outstanding) × Bitcoin Price
+                                </div>
+                            </div>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-term">Premium</div>
+                            <div class="legend-definition">How much the stock trades above (+) or below (-) its Bitcoin backing value
+                                <div class="legend-note">
+                                    <strong>Note:</strong> High premiums (like COIN's 11,983%) reflect that these companies
+                                    have significant business value beyond just their Bitcoin holdings. The premium shows
+                                    how much investors value the company's operations, growth potential, and other assets.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="legend-footer">
+                        <div class="data-sources">
+                            <strong>Data Sources:</strong> CoinGecko (company discovery), FMP (stock data), CoinGecko (Bitcoin price)
+                        </div>
+                        <div class="update-info">
+                            Data updates every hour • Last updated: <span id="companies-last-updated">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="table-container"><table id="companies-table" class="data-table"><thead><tr><th>Company</th><th class="text-right">BTC Held</th><th class="text-right">BTC Value</th><th class="text-right">Market Cap</th><th class="text-right">Stock Price</th><th class="text-right">BSP</th><th class="text-right">Premium</th></tr></thead><tbody></tbody></table></div>
         </div>
     </main>

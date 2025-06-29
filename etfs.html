@@ -40,7 +40,74 @@
             </div>
         </header>
         <div class="table-section">
-            <div class="table-header"><h2>Bitcoin ETF Holdings</h2><select id="etf-sort-select" class="sort-select"><option value="btcHeld">Sort by BTC Holdings</option><option value="aum">Sort by AUM</option><option value="premium">Sort by Premium</option><option value="price">Sort by Price</option></select></div>
+            <div class="table-header">
+                <h2>Bitcoin ETF Holdings</h2>
+                <div class="table-controls">
+                    <button id="legend-toggle" class="legend-toggle">
+                        <i data-lucide="help-circle"></i>
+                        <span>Column Guide</span>
+                    </button>
+                    <select id="etf-sort-select" class="sort-select">
+                        <option value="btcHeld">Sort by BTC Holdings</option>
+                        <option value="aum">Sort by AUM</option>
+                        <option value="premium">Sort by Premium</option>
+                        <option value="price">Sort by Price</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Legend/Guide Panel -->
+            <div id="legend-panel" class="legend-panel hidden">
+                <div class="legend-content">
+                    <div class="legend-header">
+                        <h3><i data-lucide="info"></i> Column Definitions</h3>
+                        <button id="legend-close" class="legend-close">
+                            <i data-lucide="x"></i>
+                        </button>
+                    </div>
+                    <div class="legend-grid">
+                        <div class="legend-item">
+                            <div class="legend-term">BTC Held</div>
+                            <div class="legend-definition">Total Bitcoin holdings owned by the ETF (in BTC)</div>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-term">Shares O/S</div>
+                            <div class="legend-definition">Shares Outstanding - Total number of ETF shares in circulation</div>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-term">BTC/Share</div>
+                            <div class="legend-definition">Bitcoin per Share - How much Bitcoin each ETF share represents</div>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-term">Price</div>
+                            <div class="legend-definition">Current market price per ETF share (USD)</div>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-term">NAV</div>
+                            <div class="legend-definition">Net Asset Value - Theoretical value based on underlying Bitcoin holdings</div>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-term">Premium</div>
+                            <div class="legend-definition">Premium/Discount - How much the ETF trades above (+) or below (-) its NAV
+                                <div class="legend-note">
+                                    <strong>Note:</strong> Extreme premiums (like GBTC's 191%) or discounts (like BTCC's -99%)
+                                    are real market conditions reflecting supply/demand imbalances, different fee structures,
+                                    or regulatory differences (especially for Canadian ETFs).
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="legend-footer">
+                        <div class="data-sources">
+                            <strong>Data Sources:</strong> FMP (Financial Modeling Prep), CoinGecko
+                        </div>
+                        <div class="update-info">
+                            Data updates every hour • Last updated: <span id="last-updated">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="table-container"><table id="etfs-table" class="data-table"><thead><tr><th>ETF</th><th class="text-right">BTC Held</th><th class="text-right">Shares O/S</th><th class="text-right">BTC/Share</th><th class="text-right">Price</th><th class="text-right">NAV</th><th class="text-right">Premium</th></tr></thead><tbody></tbody></table></div>
         </div>
     </main>

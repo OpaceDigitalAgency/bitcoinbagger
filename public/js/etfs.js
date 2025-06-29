@@ -72,6 +72,9 @@ function updateETFsPage(data) {
     if (etfs && etfs.length > 0) {
         updateETFsTable(etfs);
     }
+
+    // Update legend timestamp
+    updateLegendTimestamp();
 }
 
 function updateBitcoinPriceNav(bitcoin) {
@@ -150,7 +153,58 @@ document.addEventListener('change', function(e) {
             }
         });
     }
+
+    // Initialize legend functionality
+    initLegend();
 });
+
+// Legend functionality
+function initLegend() {
+    const legendToggle = document.getElementById('legend-toggle');
+    const legendPanel = document.getElementById('legend-panel');
+    const legendClose = document.getElementById('legend-close');
+
+    if (legendToggle && legendPanel && legendClose) {
+        legendToggle.addEventListener('click', function() {
+            legendPanel.classList.toggle('hidden');
+
+            // Update icon
+            const icon = legendToggle.querySelector('i');
+            if (legendPanel.classList.contains('hidden')) {
+                icon.setAttribute('data-lucide', 'help-circle');
+            } else {
+                icon.setAttribute('data-lucide', 'x');
+            }
+
+            // Reinitialize icons
+            if (window.lucide) {
+                window.lucide.createIcons();
+            }
+        });
+
+        legendClose.addEventListener('click', function() {
+            legendPanel.classList.add('hidden');
+
+            // Reset toggle icon
+            const icon = legendToggle.querySelector('i');
+            icon.setAttribute('data-lucide', 'help-circle');
+
+            // Reinitialize icons
+            if (window.lucide) {
+                window.lucide.createIcons();
+            }
+        });
+    }
+}
+
+// Update last updated timestamp in legend
+function updateLegendTimestamp() {
+    const lastUpdatedElement = document.getElementById('last-updated');
+    if (lastUpdatedElement) {
+        const now = new Date();
+        lastUpdatedElement.textContent = now.toLocaleString();
+    }
+}
 
 // Cleanup when page unloads
 window.addEventListener('beforeunload', function() {

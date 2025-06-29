@@ -72,6 +72,9 @@ function updateCompaniesPage(data) {
     if (companies && companies.length > 0) {
         updateCompaniesTable(companies);
     }
+
+    // Update companies legend timestamp
+    updateCompaniesLegendTimestamp();
 }
 
 function updateBitcoinPriceNav(bitcoin) {
@@ -144,7 +147,58 @@ document.addEventListener('change', function(e) {
             }
         });
     }
+
+    // Initialize companies legend functionality
+    initCompaniesLegend();
 });
+
+// Companies Legend functionality
+function initCompaniesLegend() {
+    const legendToggle = document.getElementById('companies-legend-toggle');
+    const legendPanel = document.getElementById('companies-legend-panel');
+    const legendClose = document.getElementById('companies-legend-close');
+
+    if (legendToggle && legendPanel && legendClose) {
+        legendToggle.addEventListener('click', function() {
+            legendPanel.classList.toggle('hidden');
+
+            // Update icon
+            const icon = legendToggle.querySelector('i');
+            if (legendPanel.classList.contains('hidden')) {
+                icon.setAttribute('data-lucide', 'help-circle');
+            } else {
+                icon.setAttribute('data-lucide', 'x');
+            }
+
+            // Reinitialize icons
+            if (window.lucide) {
+                window.lucide.createIcons();
+            }
+        });
+
+        legendClose.addEventListener('click', function() {
+            legendPanel.classList.add('hidden');
+
+            // Reset toggle icon
+            const icon = legendToggle.querySelector('i');
+            icon.setAttribute('data-lucide', 'help-circle');
+
+            // Reinitialize icons
+            if (window.lucide) {
+                window.lucide.createIcons();
+            }
+        });
+    }
+}
+
+// Update last updated timestamp in companies legend
+function updateCompaniesLegendTimestamp() {
+    const lastUpdatedElement = document.getElementById('companies-last-updated');
+    if (lastUpdatedElement) {
+        const now = new Date();
+        lastUpdatedElement.textContent = now.toLocaleString();
+    }
+}
 
 // Cleanup when page unloads
 window.addEventListener('beforeunload', function() {
