@@ -103,15 +103,16 @@ function fetchLiveETFData() {
         }
     }
 
-    // NEW: Try manual Bitcoin holdings lookup for specific ETFs that are missing
-    $missingETFs = ['BTCO', 'BRRR', 'EZBC', 'DEFI', 'BTCW', 'EBIT'];
-    foreach ($missingETFs as $ticker) {
+    // NEW: Calculate Bitcoin holdings for known Bitcoin ETFs using AUM data
+    $knownBitcoinETFs = ['BTCO', 'BRRR', 'EZBC', 'DEFI', 'BTCW', 'EBIT'];
+    foreach ($knownBitcoinETFs as $ticker) {
         if (!isset($holdingsData[$ticker])) {
-            $manualHoldings = fetchManualETFHoldings($ticker);
-            if ($manualHoldings > 0) {
+            // For known Bitcoin ETFs, calculate holdings from AUM
+            $calculatedHoldings = calculateBitcoinHoldingsFromAUM($ticker);
+            if ($calculatedHoldings > 0) {
                 $holdingsData[$ticker] = [
                     'name' => $bitcoinETFs[$ticker] ?? $ticker . ' Bitcoin ETF',
-                    'btcHeld' => $manualHoldings
+                    'btcHeld' => $calculatedHoldings
                 ];
             }
         }
@@ -212,6 +213,53 @@ function fetchLiveETFData() {
     error_log("BitcoinBagger: All ETF API sources failed - returning empty data");
 
     return $etfData;
+}
+
+// NEW: Calculate Bitcoin holdings from AUM for known Bitcoin ETFs
+function calculateBitcoinHoldingsFromAUM($ticker) {
+    try {
+        // Get ETF price and shares outstanding
+        $priceData = fetchETFPrice($ticker);
+        if (!isset($priceData['price']) || $priceData['price'] <= 0) {
+            return 0;
+        }
+
+        $price = $priceData['price'];
+        $sharesOutstanding = fetchSharesOutstanding($ticker);
+
+        if ($sharesOutstanding <= 0) {
+            return 0;
+        }
+
+        // Calculate AUM (Assets Under Management)
+        $aum = $price * $sharesOutstanding;
+
+        if ($aum <= 0) {
+            return 0;
+        }
+
+        // Get current Bitcoin price
+        $btcPrice = getCurrentBitcoinPrice();
+        if ($btcPrice <= 0) {
+            return 0;
+        }
+
+        // For Bitcoin ETFs, assume 95-98% of AUM is in Bitcoin (rest is cash for operations)
+        // This is a reasonable assumption for spot Bitcoin ETFs
+        $bitcoinAllocationPercentage = 0.96; // 96%
+        $bitcoinValue = $aum * $bitcoinAllocationPercentage;
+        $bitcoinHoldings = $bitcoinValue / $btcPrice;
+
+        // Only return if we calculated a reasonable amount (> 100 BTC for these ETFs)
+        if ($bitcoinHoldings > 100) {
+            return $bitcoinHoldings;
+        }
+
+        return 0;
+
+    } catch (Exception $e) {
+        return 0;
+    }
 }
 
 // NEW: Manual ETF holdings lookup for specific ETFs that are missing from primary APIs
