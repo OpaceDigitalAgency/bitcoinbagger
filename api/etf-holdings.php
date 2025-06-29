@@ -219,13 +219,12 @@ function fetchManualETFHoldings($ticker) {
     // Try multiple specialized Bitcoin ETF data sources
     $holdings = 0;
 
-    // Method 1: Try SEC filings API (for US ETFs)
+    // Method 1: Try Yahoo Finance fund holdings with comprehensive modules
     try {
-        // Use Yahoo Finance to get fund holdings data
-        $url = "https://query1.finance.yahoo.com/v10/finance/quoteSummary/{$ticker}?modules=fundProfile,topHoldings";
+        $url = "https://query1.finance.yahoo.com/v10/finance/quoteSummary/{$ticker}?modules=fundProfile,topHoldings,fundPerformance,assetProfile";
         $context = stream_context_create([
             'http' => [
-                'timeout' => 10,
+                'timeout' => 15,
                 'user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             ]
         ]);
@@ -233,14 +232,47 @@ function fetchManualETFHoldings($ticker) {
         $response = file_get_contents($url, false, $context);
         if ($response !== false) {
             $data = json_decode($response, true);
-            // Look for Bitcoin holdings in the fund profile
+
+            // Method 1a: Check top holdings for Bitcoin
             if (isset($data['quoteSummary']['result'][0]['topHoldings']['holdings'])) {
                 $holdings_data = $data['quoteSummary']['result'][0]['topHoldings']['holdings'];
                 foreach ($holdings_data as $holding) {
-                    if (isset($holding['symbol']) && strtolower($holding['symbol']) === 'btc-usd') {
-                        // Extract Bitcoin amount if available
-                        $holdings = floatval($holding['holdingPercent'] ?? 0) * 100; // Rough estimate
+                    $holdingName = strtolower($holding['holdingName'] ?? '');
+                    $symbol = strtolower($holding['symbol'] ?? '');
+
+                    if (stripos($holdingName, 'bitcoin') !== false ||
+                        $symbol === 'btc-usd' || $symbol === 'btc' ||
+                        stripos($holdingName, 'btc') !== false) {
+
+                        // Get the fund's total net assets and calculate Bitcoin holdings
+                        $percentage = floatval($holding['holdingPercent'] ?? 0);
+                        if ($percentage > 80) { // If >80% Bitcoin, calculate actual holdings
+                            // Get fund size from price data
+                            $priceData = fetchETFPrice($ticker);
+                            if (isset($priceData['aum']) && $priceData['aum'] > 0) {
+                                $btcPrice = getCurrentBitcoinPrice();
+                                if ($btcPrice > 0) {
+                                    $holdings = ($priceData['aum'] * $percentage / 100) / $btcPrice;
+                                }
+                            }
+                        }
                         break;
+                    }
+                }
+            }
+
+            // Method 1b: Check fund profile for Bitcoin focus
+            if ($holdings == 0 && isset($data['quoteSummary']['result'][0]['assetProfile']['longBusinessSummary'])) {
+                $summary = strtolower($data['quoteSummary']['result'][0]['assetProfile']['longBusinessSummary']);
+                if (stripos($summary, 'bitcoin') !== false && stripos($summary, 'track') !== false) {
+                    // This is likely a Bitcoin tracking ETF - estimate holdings from AUM
+                    $priceData = fetchETFPrice($ticker);
+                    if (isset($priceData['aum']) && $priceData['aum'] > 0) {
+                        $btcPrice = getCurrentBitcoinPrice();
+                        if ($btcPrice > 0) {
+                            // Assume 95% of AUM is in Bitcoin for Bitcoin ETFs
+                            $holdings = ($priceData['aum'] * 0.95) / $btcPrice;
+                        }
                     }
                 }
             }
@@ -249,19 +281,27 @@ function fetchManualETFHoldings($ticker) {
         // Continue to next method
     }
 
-    // Method 2: Try alternative Bitcoin ETF tracking APIs
+    // Method 2: Try Financial Modeling Prep ETF holdings endpoint
     if ($holdings == 0) {
         try {
-            // Try CoinGecko's ETF endpoint
-            $url = "https://api.coingecko.com/api/v3/search?query={$ticker}";
-            $response = file_get_contents($url);
-            if ($response !== false) {
-                $data = json_decode($response, true);
-                // This is a fallback - we'll use estimated holdings based on AUM
-                if (isset($data['coins']) && !empty($data['coins'])) {
-                    // For now, return a small positive value to indicate the ETF exists
-                    // This will trigger the price lookup and prevent 0 BTC display
-                    $holdings = 0.1; // Minimal holdings to trigger data fetch
+            $fmpKey = getApiKey('FMP');
+            if ($fmpKey && $fmpKey !== 'REDACTED_API_KEY') {
+                $url = "https://financialmodelingprep.com/api/v3/etf-holder/{$ticker}?apikey={$fmpKey}";
+                $response = file_get_contents($url);
+                if ($response !== false) {
+                    $data = json_decode($response, true);
+                    if (is_array($data) && !empty($data)) {
+                        foreach ($data as $holding) {
+                            $asset = strtolower($holding['asset'] ?? '');
+                            if (stripos($asset, 'bitcoin') !== false || stripos($asset, 'btc') !== false) {
+                                $shares = floatval($holding['sharesNumber'] ?? 0);
+                                if ($shares > 0) {
+                                    $holdings = $shares;
+                                    break;
+                                }
+                            }
+                        }
+                    }
                 }
             }
         } catch (Exception $e) {
@@ -269,7 +309,30 @@ function fetchManualETFHoldings($ticker) {
         }
     }
 
-    // Method 3: Try ETFdb.com API for comprehensive ETF data
+    // Method 3: Try direct fund data calculation from AUM and Bitcoin focus
+    if ($holdings == 0) {
+        try {
+            // For known Bitcoin ETFs, calculate holdings from AUM
+            $priceData = fetchETFPrice($ticker);
+            if (isset($priceData['price']) && $priceData['price'] > 0) {
+                // Get shares outstanding and calculate AUM
+                $shares = fetchSharesOutstanding($ticker);
+                if ($shares > 0) {
+                    $aum = $priceData['price'] * $shares;
+                    $btcPrice = getCurrentBitcoinPrice();
+
+                    if ($aum > 0 && $btcPrice > 0) {
+                        // For Bitcoin ETFs, assume 95% of AUM is in Bitcoin (5% cash/fees)
+                        $holdings = ($aum * 0.95) / $btcPrice;
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            // Continue
+        }
+    }
+
+    // Method 4: Try ETFdb.com API for comprehensive ETF data
     if ($holdings == 0) {
         try {
             $etfdbData = fetchETFdbSingleETF($ticker);
