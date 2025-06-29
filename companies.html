@@ -175,6 +175,7 @@
                         this.companies = data.data.filter(item => item.type === 'stock');
                         this.updateOverviewStats();
                         this.renderCompaniesTable();
+                        this.updateCompaniesLegendTimestamp();
                     }
                 } catch (error) {
                     console.error('Error loading companies:', error);
@@ -250,6 +251,43 @@
                     this.sortBy = e.target.value;
                     this.renderCompaniesTable();
                 });
+
+                // Companies Legend functionality
+                const legendToggle = document.getElementById('companies-legend-toggle');
+                const legendPanel = document.getElementById('companies-legend-panel');
+                const legendClose = document.getElementById('companies-legend-close');
+
+                if (legendToggle && legendPanel && legendClose) {
+                    legendToggle.addEventListener('click', () => {
+                        legendPanel.classList.toggle('hidden');
+
+                        // Update icon
+                        const icon = legendToggle.querySelector('i');
+                        if (legendPanel.classList.contains('hidden')) {
+                            icon.setAttribute('data-lucide', 'help-circle');
+                        } else {
+                            icon.setAttribute('data-lucide', 'x');
+                        }
+
+                        // Reinitialize icons
+                        if (window.lucide) {
+                            window.lucide.createIcons();
+                        }
+                    });
+
+                    legendClose.addEventListener('click', () => {
+                        legendPanel.classList.add('hidden');
+
+                        // Reset toggle icon
+                        const icon = legendToggle.querySelector('i');
+                        icon.setAttribute('data-lucide', 'help-circle');
+
+                        // Reinitialize icons
+                        if (window.lucide) {
+                            window.lucide.createIcons();
+                        }
+                    });
+                }
             }
 
             hideLoadingScreen() {
@@ -269,6 +307,14 @@
             showError(message) {
                 const tbody = document.querySelector('#companies-table tbody');
                 tbody.innerHTML = `<tr><td colspan="7" class="error-cell">${message}</td></tr>`;
+            }
+
+            updateCompaniesLegendTimestamp() {
+                const lastUpdatedElement = document.getElementById('companies-last-updated');
+                if (lastUpdatedElement) {
+                    const now = new Date();
+                    lastUpdatedElement.textContent = now.toLocaleString();
+                }
             }
         }
 

@@ -158,6 +158,7 @@
                         this.etfs = data.data;
                         this.updateOverviewStats();
                         this.renderETFsTable();
+                        this.updateLegendTimestamp();
                         console.log('ETFs loaded:', this.etfs.length);
                     } else {
                         this.showError('No ETF data available - discovery in progress');
@@ -234,6 +235,43 @@
                     this.sortBy = e.target.value;
                     this.renderETFsTable();
                 });
+
+                // Legend functionality
+                const legendToggle = document.getElementById('legend-toggle');
+                const legendPanel = document.getElementById('legend-panel');
+                const legendClose = document.getElementById('legend-close');
+
+                if (legendToggle && legendPanel && legendClose) {
+                    legendToggle.addEventListener('click', () => {
+                        legendPanel.classList.toggle('hidden');
+
+                        // Update icon
+                        const icon = legendToggle.querySelector('i');
+                        if (legendPanel.classList.contains('hidden')) {
+                            icon.setAttribute('data-lucide', 'help-circle');
+                        } else {
+                            icon.setAttribute('data-lucide', 'x');
+                        }
+
+                        // Reinitialize icons
+                        if (window.lucide) {
+                            window.lucide.createIcons();
+                        }
+                    });
+
+                    legendClose.addEventListener('click', () => {
+                        legendPanel.classList.add('hidden');
+
+                        // Reset toggle icon
+                        const icon = legendToggle.querySelector('i');
+                        icon.setAttribute('data-lucide', 'help-circle');
+
+                        // Reinitialize icons
+                        if (window.lucide) {
+                            window.lucide.createIcons();
+                        }
+                    });
+                }
             }
 
             hideLoadingScreen() {
@@ -253,6 +291,14 @@
             showError(message) {
                 const tbody = document.querySelector('#etfs-table tbody');
                 tbody.innerHTML = `<tr><td colspan="7" class="error-cell">${message}</td></tr>`;
+            }
+
+            updateLegendTimestamp() {
+                const lastUpdatedElement = document.getElementById('last-updated');
+                if (lastUpdatedElement) {
+                    const now = new Date();
+                    lastUpdatedElement.textContent = now.toLocaleString();
+                }
             }
         }
 
