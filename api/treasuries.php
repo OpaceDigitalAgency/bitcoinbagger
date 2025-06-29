@@ -877,18 +877,22 @@ function fetchLiveTreasuryData() {
                     }
                 }
 
-                // Fetch comprehensive stock data for all companies with Bitcoin holdings > 1000 BTC
-                if ($btcHeld > 1000) {
-                    $stockData = fetchStockData($ticker);
-                    $stockPrice = $stockData['price'];
+                // Fetch comprehensive stock data for ALL companies with Bitcoin holdings
+                // This ensures we get real data or skip the company entirely
+                $stockData = fetchStockData($ticker);
+                $stockPrice = $stockData['price'];
 
-                    // Use fetched data if available, otherwise keep existing values
-                    if ($stockData['marketCap'] > 0) {
-                        $marketCap = $stockData['marketCap'];
-                    }
-                    if ($stockData['sharesOutstanding'] > 0) {
-                        $sharesOutstanding = $stockData['sharesOutstanding'];
-                    }
+                // Use fetched data if available, otherwise keep existing values
+                if ($stockData['marketCap'] > 0) {
+                    $marketCap = $stockData['marketCap'];
+                }
+                if ($stockData['sharesOutstanding'] > 0) {
+                    $sharesOutstanding = $stockData['sharesOutstanding'];
+                }
+
+                // If we still don't have market cap, try comprehensive market cap fetcher
+                if ($marketCap == 0) {
+                    $marketCap = fetchComprehensiveMarketCap($ticker);
                 }
 
                 // Calculate shares outstanding if we have both market cap and stock price but no shares data
@@ -896,10 +900,29 @@ function fetchLiveTreasuryData() {
                     $sharesOutstanding = $marketCap / $stockPrice;
                 }
 
-                // Calculate Bitcoin per share
+                // CRITICAL: Only include companies where we have meaningful financial data
+                // This prevents N/A values from being displayed
+                if ($stockPrice == 0) {
+                    // Skip companies without stock price data - no N/A values allowed
+                    continue;
+                }
+
+                // CRITICAL: Ensure we have market cap data - if not, skip this company
+                if ($marketCap == 0) {
+                    // Skip companies without market cap data - no N/A values allowed
+                    continue;
+                }
+
+                // Calculate Bitcoin per share - ensure we have shares outstanding
                 $bitcoinPerShare = 0;
                 if ($sharesOutstanding > 0 && $btcHeld > 0) {
                     $bitcoinPerShare = $btcHeld / $sharesOutstanding;
+                } else if ($sharesOutstanding == 0 && $marketCap > 0 && $stockPrice > 0) {
+                    // Calculate shares outstanding from market cap and price
+                    $sharesOutstanding = $marketCap / $stockPrice;
+                    if ($sharesOutstanding > 0 && $btcHeld > 0) {
+                        $bitcoinPerShare = $btcHeld / $sharesOutstanding;
+                    }
                 }
 
                 // Calculate BSP (Bitcoin per Share Price) - the value of Bitcoin holdings per share
@@ -907,7 +930,9 @@ function fetchLiveTreasuryData() {
                 if ($bitcoinPerShare > 0) {
                     // Get current Bitcoin price
                     $btcPrice = getCurrentBitcoinPrice();
-                    $bsp = $bitcoinPerShare * $btcPrice;
+                    if ($btcPrice > 0) {
+                        $bsp = $bitcoinPerShare * $btcPrice;
+                    }
                 }
 
                 // Calculate premium/discount - how much the stock trades above/below its Bitcoin value
@@ -916,19 +941,11 @@ function fetchLiveTreasuryData() {
                     $premium = (($stockPrice - $bsp) / $bsp) * 100;
                 }
 
-                // If we don't have shares outstanding but have market cap, estimate it
-                if ($sharesOutstanding == 0 && $marketCap > 0 && $stockPrice > 0) {
-                    $sharesOutstanding = $marketCap / $stockPrice;
-
-                    // Recalculate with estimated shares
-                    if ($btcHeld > 0) {
-                        $bitcoinPerShare = $btcHeld / $sharesOutstanding;
-                        $btcPrice = getCurrentBitcoinPrice();
-                        $bsp = $bitcoinPerShare * $btcPrice;
-                        if ($bsp > 0) {
-                            $premium = (($stockPrice - $bsp) / $bsp) * 100;
-                        }
-                    }
+                // FINAL CHECK: Only include companies with complete data
+                // This ensures no N/A values are displayed to users
+                if ($bitcoinPerShare == 0 || $bsp == 0) {
+                    // Skip companies where we can't calculate meaningful metrics
+                    continue;
                 }
 
                 // Fix company names for numeric IDs
