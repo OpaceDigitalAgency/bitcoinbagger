@@ -25,6 +25,45 @@ function getFMPKey() {
     return $_ENV['FMP_API_KEY'] ?? '';
 }
 
+// EMERGENCY FALLBACK: Basic company data when APIs fail
+function getEmergencyCompanyData() {
+    $btcPrice = getCurrentBitcoinPrice();
+    if (!$btcPrice) $btcPrice = 108000; // Fallback BTC price
+
+    return [
+        [
+            'symbol' => 'MSTR',
+            'name' => 'MicroStrategy Incorporated',
+            'btcHeld' => 331200,
+            'marketCap' => 85000000000,
+            'price' => 2500,
+            'type' => 'stock',
+            'lastUpdated' => date('Y-m-d H:i:s'),
+            'dataSource' => 'EMERGENCY_FALLBACK'
+        ],
+        [
+            'symbol' => 'MARA',
+            'name' => 'Marathon Digital Holdings Inc',
+            'btcHeld' => 26200,
+            'marketCap' => 8500000000,
+            'price' => 35,
+            'type' => 'stock',
+            'lastUpdated' => date('Y-m-d H:i:s'),
+            'dataSource' => 'EMERGENCY_FALLBACK'
+        ],
+        [
+            'symbol' => 'COIN',
+            'name' => 'Coinbase Global Inc',
+            'btcHeld' => 9181,
+            'marketCap' => 75000000000,
+            'price' => 280,
+            'type' => 'stock',
+            'lastUpdated' => date('Y-m-d H:i:s'),
+            'dataSource' => 'EMERGENCY_FALLBACK'
+        ]
+    ];
+}
+
 // Get companies with Bitcoin holdings from CoinGecko
 function getCompaniesFromCoinGecko() {
     $companies = [];
@@ -213,6 +252,29 @@ function setCache($key, $data) {
 
 // MAIN API EXECUTION - SIMPLIFIED
 try {
+    // EMERGENCY CHECK: If no FMP key, use emergency fallback
+    $fmpKey = getFMPKey();
+    if (empty($fmpKey)) {
+        error_log("Treasuries API: No FMP key found, using emergency fallback");
+        $emergencyData = getEmergencyCompanyData();
+
+        echo json_encode([
+            'success' => true,
+            'data' => $emergencyData,
+            'meta' => [
+                'timestamp' => time(),
+                'datetime' => date('Y-m-d H:i:s'),
+                'source' => 'EMERGENCY_FALLBACK',
+                'cache' => false,
+                'totalCompanies' => count($emergencyData),
+                'totalBTC' => array_sum(array_column($emergencyData, 'btcHeld')),
+                'data_freshness' => 'EMERGENCY_MODE',
+                'warning' => 'Using emergency fallback data - FMP API key required for live data'
+            ]
+        ]);
+        exit;
+    }
+
     // Check for cache clearing request
     $clearCache = isset($_GET['clear_cache']) || isset($_GET['force_refresh']);
 

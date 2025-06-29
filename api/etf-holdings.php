@@ -26,6 +26,60 @@ function getFMPKey() {
     return $_ENV['FMP_API_KEY'] ?? '';
 }
 
+// EMERGENCY FALLBACK: Basic ETF data when APIs fail
+function getEmergencyETFData() {
+    $btcPrice = getCurrentBitcoinPrice();
+    if (!$btcPrice) $btcPrice = 108000; // Fallback BTC price
+
+    return [
+        [
+            'ticker' => 'IBIT',
+            'name' => 'iShares Bitcoin Trust',
+            'btcHeld' => 695829,
+            'sharesOutstanding' => 1229496047,
+            'nav' => 60.72,
+            'price' => 60.72,
+            'aum' => 74655000000,
+            'btcPerShare' => 0.000566,
+            'premium' => 0,
+            'expenseRatio' => 0,
+            'volume' => 0,
+            'lastUpdated' => date('Y-m-d H:i:s'),
+            'dataSource' => 'EMERGENCY_FALLBACK'
+        ],
+        [
+            'ticker' => 'FBTC',
+            'name' => 'Fidelity Wise Origin Bitcoin Fund',
+            'btcHeld' => 199798,
+            'sharesOutstanding' => 219030574,
+            'nav' => 93.28,
+            'price' => 93.28,
+            'aum' => 20431171943,
+            'btcPerShare' => 0.000912,
+            'premium' => 0,
+            'expenseRatio' => 0,
+            'volume' => 0,
+            'lastUpdated' => date('Y-m-d H:i:s'),
+            'dataSource' => 'EMERGENCY_FALLBACK'
+        ],
+        [
+            'ticker' => 'GBTC',
+            'name' => 'Grayscale Bitcoin Trust',
+            'btcHeld' => 185122,
+            'sharesOutstanding' => 692369942,
+            'nav' => 84.16,
+            'price' => 84.16,
+            'aum' => 58269854319,
+            'btcPerShare' => 0.000267,
+            'premium' => 0,
+            'expenseRatio' => 0,
+            'volume' => 0,
+            'lastUpdated' => date('Y-m-d H:i:s'),
+            'dataSource' => 'EMERGENCY_FALLBACK'
+        ]
+    ];
+}
+
 // REMOVED: getBitcoinHoldingsFromBitcoinETFData function
 // Using only FMP ETF Holdings API for all Bitcoin ETF data
 
@@ -266,6 +320,30 @@ function setCache($key, $data) {
 
 // MAIN API EXECUTION - SIMPLIFIED
 try {
+    // EMERGENCY CHECK: If no FMP key, use emergency fallback
+    $fmpKey = getFMPKey();
+    if (empty($fmpKey)) {
+        error_log("ETF Holdings API: No FMP key found, using emergency fallback");
+        $emergencyData = getEmergencyETFData();
+
+        echo json_encode([
+            'success' => true,
+            'data' => $emergencyData,
+            'meta' => [
+                'timestamp' => time(),
+                'datetime' => date('Y-m-d H:i:s'),
+                'source' => 'EMERGENCY_FALLBACK',
+                'cache' => false,
+                'totalETFs' => count($emergencyData),
+                'totalBTC' => array_sum(array_column($emergencyData, 'btcHeld')),
+                'totalAUM' => array_sum(array_column($emergencyData, 'aum')),
+                'data_freshness' => 'EMERGENCY_MODE',
+                'warning' => 'Using emergency fallback data - FMP API key required for live data'
+            ]
+        ]);
+        exit;
+    }
+
     // Check for cache clearing request
     $clearCache = isset($_GET['clear_cache']) || isset($_GET['force_refresh']);
 
