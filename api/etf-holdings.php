@@ -217,17 +217,56 @@ function fetchLiveETFData() {
 
 // NEW: Calculate Bitcoin holdings from AUM for known Bitcoin ETFs
 function calculateBitcoinHoldingsFromAUM($ticker) {
+    // Use aggressive caching to avoid rate limits
+    $cacheKey = "calculated_btc_holdings_{$ticker}";
+    $cached = getCache($cacheKey, 3600); // 1 hour cache
+
+    if ($cached !== null && $cached > 0) {
+        return $cached;
+    }
+
     try {
-        // Get ETF price and shares outstanding
-        $priceData = fetchETFPrice($ticker);
-        if (!isset($priceData['price']) || $priceData['price'] <= 0) {
+        // Add delay to avoid rate limiting
+        usleep(500000); // 500ms delay
+
+        // Try a single comprehensive API call to get all needed data
+        $url = "https://query1.finance.yahoo.com/v7/finance/quote?symbols={$ticker}&fields=regularMarketPrice,sharesOutstanding,marketCap";
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 10,
+                'user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'header' => [
+                    'Accept: application/json',
+                    'Accept-Language: en-US,en;q=0.9'
+                ]
+            ]
+        ]);
+
+        $response = file_get_contents($url, false, $context);
+        if ($response === false || strpos($response, 'Too Many Requests') !== false) {
+            // Rate limited - return 0 and cache it briefly
+            setCache($cacheKey, 0);
             return 0;
         }
 
-        $price = $priceData['price'];
-        $sharesOutstanding = fetchSharesOutstanding($ticker);
+        $data = json_decode($response, true);
+        if (!isset($data['quoteResponse']['result'][0])) {
+            setCache($cacheKey, 0);
+            return 0;
+        }
 
-        if ($sharesOutstanding <= 0) {
+        $quote = $data['quoteResponse']['result'][0];
+        $price = floatval($quote['regularMarketPrice'] ?? 0);
+        $sharesOutstanding = floatval($quote['sharesOutstanding'] ?? 0);
+        $marketCap = floatval($quote['marketCap'] ?? 0);
+
+        // If we don't have shares outstanding, try to calculate from market cap
+        if ($sharesOutstanding == 0 && $marketCap > 0 && $price > 0) {
+            $sharesOutstanding = $marketCap / $price;
+        }
+
+        if ($price <= 0 || $sharesOutstanding <= 0) {
+            setCache($cacheKey, 0);
             return 0;
         }
 
@@ -235,12 +274,14 @@ function calculateBitcoinHoldingsFromAUM($ticker) {
         $aum = $price * $sharesOutstanding;
 
         if ($aum <= 0) {
+            setCache($cacheKey, 0);
             return 0;
         }
 
         // Get current Bitcoin price
         $btcPrice = getCurrentBitcoinPrice();
         if ($btcPrice <= 0) {
+            setCache($cacheKey, 0);
             return 0;
         }
 
@@ -250,14 +291,17 @@ function calculateBitcoinHoldingsFromAUM($ticker) {
         $bitcoinValue = $aum * $bitcoinAllocationPercentage;
         $bitcoinHoldings = $bitcoinValue / $btcPrice;
 
-        // Only return if we calculated a reasonable amount (> 100 BTC for these ETFs)
-        if ($bitcoinHoldings > 100) {
+        // Only return if we calculated a reasonable amount (> 50 BTC for smaller ETFs)
+        if ($bitcoinHoldings > 50) {
+            setCache($cacheKey, $bitcoinHoldings);
             return $bitcoinHoldings;
         }
 
+        setCache($cacheKey, 0);
         return 0;
 
     } catch (Exception $e) {
+        setCache($cacheKey, 0);
         return 0;
     }
 }
